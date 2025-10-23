@@ -1,18 +1,28 @@
-<!-- OPENSPEC:START -->
-# OpenSpec Instructions
+# AGENTS — Roles & RACI (Task MCP)
 
-These instructions are for AI assistants working in this project.
+_Last updated: 2025-10-23_
 
-Always open `@/openspec/AGENTS.md` when the request:
-- Mentions planning or proposals (words like proposal, spec, change, plan)
-- Introduces new capabilities, breaking changes, architecture shifts, or big performance/security work
-- Sounds ambiguous and you need the authoritative spec before coding
+| Agent         | Role                              | Primary Responsibilities (Task MCP only)                                   | DRI Backups        |
+| ------------- | --------------------------------- | -------------------------------------------------------------------------- | ------------------ |
+| Orchestrator  | Plan architect & coordinator      | Phasing, cross-agent handoffs, phase gates                                 | Architect, DevOps  |
+| Architect     | Strategic planning & design       | Contracts, error codes, security model, versioning                         | Orchestrator       |
+| Engineer      | Python TDD specialist             | Lock/slug/path utilities; schema validators; test harnesses                | Reviewer, Generalist |
+| Builder       | Full-stack generalist             | Stdio/HTTPS servers, CLI glue, file IO, resources                          | Engineer           |
+| Database      | Data layer specialist             | N/A primary (consult on receipts perf/FS interactions)                     | Engineer           |
+| Reviewer      | Code quality & testing            | Code review checklists, CI gating, perf thresholds                         | Engineer           |
+| Knowledge     | Research & documentation          | Docs, quickstarts, examples                                                | Orchestrator       |
+| DevOps        | Build & deployment                | Dockerfiles, TLS/bearer auth, healthchecks, rate limiting                  | Orchestrator, Builder |
+| Generalist    | Quick fixes & triage              | Bug triage, sample repos, misc scripts                                     | Reviewer           |
 
-Use `@/openspec/AGENTS.md` to learn:
-- How to create and apply change proposals
-- Spec format and conventions
-- Project structure and guidelines
+### Working Agreements
+- WIP limit: ≤2 tasks per agent.
+- DoD: tests & docs updated, schemas validated in CI, security checks pass, receipts produced where applicable.
+- Reviews: Reviewer sign-off mandatory for merge.
 
-Keep this managed block so 'openspec update' can refresh the instructions.
-
-<!-- OPENSPEC:END -->
+## Docs
+/docs                # starting plans
+  /completed_plans   # finished plans
+  /implementation_reports # summaries of completed implementations
+  /phases              # plans to start with and implement
+  /schemas             # Schemas to reference as starting points
+  /handoffs             # when closing a session, place detailed handoffs here
