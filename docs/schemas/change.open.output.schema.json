@@ -1,0 +1,83 @@
+{
+  "$id": "https://example.org/task-mcp/change.open.output.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "change.open output",
+  "version": "1.0.0",
+  "type": "object",
+  "required": [
+    "apiVersion",
+    "slug",
+    "status",
+    "paths",
+    "resourceUris"
+  ],
+  "properties": {
+    "apiVersion": {
+      "type": "string"
+    },
+    "slug": {
+      "type": "string"
+    },
+    "created": {
+      "type": "boolean"
+    },
+    "locked": {
+      "type": "boolean"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "draft",
+        "archived"
+      ]
+    },
+    "paths": {
+      "type": "object",
+      "required": [
+        "root",
+        "proposal",
+        "tasks",
+        "delta"
+      ],
+      "properties": {
+        "root": {
+          "type": "string"
+        },
+        "proposal": {
+          "type": "string"
+        },
+        "tasks": {
+          "type": "string"
+        },
+        "delta": {
+          "type": "string"
+        }
+      }
+    },
+    "resourceUris": {
+      "type": "object",
+      "required": [
+        "proposal",
+        "tasks",
+        "delta"
+      ],
+      "properties": {
+        "proposal": {
+          "type": "string"
+        },
+        "tasks": {
+          "type": "string"
+        },
+        "delta": {
+          "type": "string"
+        }
+      }
+    },
+    "toolVersions": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "string"
+      }
+    }
+  }
+}
