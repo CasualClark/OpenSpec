@@ -1,0 +1,40 @@
+{
+  "$id": "https://example.org/task-mcp/change.open.input.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "change.open input",
+  "version": "1.0.0",
+  "type": "object",
+  "required": [
+    "title",
+    "slug"
+  ],
+  "properties": {
+    "title": {
+      "type": "string",
+      "minLength": 1
+    },
+    "slug": {
+      "type": "string",
+      "pattern": "^[a-z0-9](?:[a-z0-9\\-]{1,62})[a-z0-9]$"
+    },
+    "rationale": {
+      "type": "string"
+    },
+    "owner": {
+      "type": "string"
+    },
+    "ttl": {
+      "type": "integer",
+      "minimum": 60,
+      "maximum": 86400
+    },
+    "template": {
+      "type": "string",
+      "enum": [
+        "feature",
+        "bugfix",
+        "chore"
+      ]
+    }
+  }
+}

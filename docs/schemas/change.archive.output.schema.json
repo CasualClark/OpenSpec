@@ -1,0 +1,30 @@
+{
+  "$id": "https://example.org/task-mcp/change.archive.output.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "change.archive output",
+  "version": "1.0.0",
+  "type": "object",
+  "required": [
+    "apiVersion",
+    "slug",
+    "archived",
+    "receipt"
+  ],
+  "properties": {
+    "apiVersion": {
+      "type": "string"
+    },
+    "slug": {
+      "type": "string"
+    },
+    "archived": {
+      "type": "boolean"
+    },
+    "alreadyArchived": {
+      "type": "boolean"
+    },
+    "receipt": {
+      "$ref": "https://example.org/task-mcp/receipt.schema.json"
+    }
+  }
+}

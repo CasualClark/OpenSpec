@@ -1,0 +1,15 @@
+{
+  "$id": "https://example.org/task-mcp/change.archive.input.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "change.archive input",
+  "version": "1.0.0",
+  "type": "object",
+  "required": [
+    "slug"
+  ],
+  "properties": {
+    "slug": {
+      "type": "string"
+    }
+  }
+}

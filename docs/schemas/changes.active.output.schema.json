@@ -1,0 +1,65 @@
+{
+  "$id": "https://example.org/task-mcp/changes.active.output.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "changes://active output",
+  "version": "1.0.0",
+  "type": "object",
+  "required": [
+    "page",
+    "pageSize",
+    "items"
+  ],
+  "properties": {
+    "page": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "pageSize": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 200
+    },
+    "nextPageToken": {
+      "type": "string"
+    },
+    "items": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "slug",
+          "title",
+          "status",
+          "paths"
+        ],
+        "properties": {
+          "slug": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "draft",
+              "archived"
+            ]
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "paths": {
+            "type": "object",
+            "properties": {
+              "root": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
