@@ -123,6 +123,7 @@
         },
         "time": {
             "command": ["uvx", "mcp-server-time"],
+            "enabled": true,
             "type": "local",
         },
         "zai-mcp-server": {
@@ -164,8 +165,7 @@
         "AGENTS.md",
         ".opencode/prompts/*.md",
         ".opencode/command/*.md",
-        ".opencode/agent/*.md",
-        ".opencode/rules/*.md",
+        ".opencode/agent/*.md"
     ],
     "command": {
         "analyze-performance": {
