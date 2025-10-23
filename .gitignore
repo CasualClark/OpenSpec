@@ -47,6 +47,17 @@ web_modules/
 # TypeScript cache
 *.tsbuildinfo
 
+
+# Environments
+.venv/
+venv/
+env/
+ENV/
+env.bak/
+venv.bak/
+.env
+*.env
+
 # Optional npm cache directory
 .npm
 
@@ -140,8 +151,6 @@ dist/
 vite.config.js.timestamp-*
 vite.config.ts.timestamp-*
 
-# Internal Docs
-docs/
 
 # Claude
 .claude/
@@ -150,3 +159,49 @@ CLAUDE.md
 
 # Pnpm
 .pnpm-store/
+.pampa/chunks
+.pampa/pampa.db
+apps/desktop/.pampa/chunks/
+
+# ---------------------------
+# Python
+# ---------------------------
+__pycache__/
+*.py[cod]
+*$py.class
+.Python
+__pypackages__/
+.tox/
+.nox/
+.pytest_cache/
+.coverage*
+.cache
+.mypy_cache/
+.hypothesis/
+.pyre/
+.pytype/
+.dmypy.json
+dmypy.json
+
+test_venv_3.1
+
+# Virtual environments
+.venv/
+venv/
+env/
+*/.venv/
+*/venv/
+
+# Python junk
+__pycache__/
+*.py[cod]
+*.pyo
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+test_venv*
+
+# OS/editor
+.DS_Store
