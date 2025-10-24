@@ -1,0 +1,339 @@
+name: Performance Tests
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'src/**'
+      - 'test/**'
+      - 'package.json'
+      - 'pnpm-lock.yaml'
+  push:
+    branches: [main]
+    paths:
+      - 'src/**'
+      - 'test/**'
+      - 'package.json'
+      - 'pnpm-lock.yaml'
+  workflow_dispatch:
+  schedule:
+    # Run performance tests daily at 2 AM UTC
+    - cron: '0 2 * * *'
+
+permissions:
+  contents: read
+  actions: read
+  checks: write
+
+concurrency:
+  group: perf-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  performance-tests:
+    name: Performance Benchmarks
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build project
+        run: pnpm run build
+
+      - name: Enable garbage collection for performance testing
+        run: echo "NODE_OPTIONS=--expose-gc" >> $GITHUB_ENV
+
+      - name: Run performance tests
+        id: perf-tests
+        run: |
+          set -e
+          echo "🚀 Running OpenSpec performance tests..."
+          
+          # Run performance test runner
+          node --expose-gc dist/scripts/performance-test-runner.js || {
+            echo "❌ Performance tests failed"
+            exit 1
+          }
+          
+          echo "✅ Performance tests completed"
+
+      - name: Upload performance report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: performance-report-${{ github.run_number }}
+          path: |
+            performance-report.json
+            performance-baseline.json
+          retention-days: 30
+
+      - name: Download baseline for comparison
+        if: github.event_name == 'pull_request'
+        uses: actions/download-artifact@v4
+        continue-on-error: true
+        with:
+          name: performance-baseline-main
+          path: ./baseline
+          merge-multiple: false
+
+      - name: Setup baseline for PR comparison
+        if: github.event_name == 'pull_request'
+        run: |
+          if [ -f "./baseline/performance-baseline.json" ]; then
+            echo "📊 Found baseline for comparison"
+            cp "./baseline/performance-baseline.json" "./performance-baseline.json"
+          else
+            echo "⚠️ No baseline found, will create new one"
+          fi
+
+      - name: Detect performance regressions
+        if: github.event_name == 'pull_request' || github.event_name == 'push'
+        id: regression-detection
+        run: |
+          set -e
+          
+          # Run regression detection
+          node -e "
+          const { PerformanceRegressionDetector } = require('./dist/test/performance/utils/performance-regression-detector.js');
+          const { promises: fs } = require('fs');
+          
+          async function detectRegressions() {
+            const detector = new PerformanceRegressionDetector();
+            const report = JSON.parse(await fs.readFile('performance-report.json', 'utf-8'));
+            const result = await detector.detectRegressions(report);
+            
+            console.log('🔍 Regression Analysis Results:');
+            detector.printRegressionResults(result);
+            
+            // Set output for GitHub Actions
+            if (result.detected) {
+              console.log('::set-output name=regressions_detected::true');
+              console.log('::set-output name=regression_severity::' + result.severity);
+              console.log('::set-output name=regression_summary::' + result.summary);
+              
+              // Exit with error code for CI if regressions detected
+              process.exit(1);
+            } else {
+              console.log('::set-output name=regressions_detected::false');
+              console.log('✅ No performance regressions detected');
+            }
+          }
+          
+          detectRegressions().catch(console.error);
+          " || {
+            REGRESSION_EXIT_CODE=$?
+            if [ $REGRESSION_EXIT_CODE -eq 1 ]; then
+              echo "⚠️ Performance regressions detected"
+              echo "regressions_detected=true" >> $GITHUB_OUTPUT
+            else
+              echo "❌ Regression detection failed"
+              exit $REGRESSION_EXIT_CODE
+            fi
+          }
+
+      - name: Update baseline if needed
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        run: |
+          node -e "
+          const { PerformanceRegressionDetector } = require('./dist/test/performance/utils/performance-regression-detector.js');
+          const { promises: fs } = require('fs');
+          
+          async function updateBaseline() {
+            const detector = new PerformanceRegressionDetector();
+            const report = JSON.parse(await fs.readFile('performance-report.json', 'utf-8'));
+            const regressionResult = await detector.detectRegressions(report);
+            
+            const updated = await detector.updateBaselineIfNeeded(report, regressionResult);
+            if (updated) {
+              console.log('📈 Baseline updated with performance improvements');
+            }
+          }
+          
+          updateBaseline().catch(console.error);
+          "
+
+      - name: Save baseline for main branch
+        if: github.ref == 'refs/heads/main'
+        uses: actions/upload-artifact@v4
+        with:
+          name: performance-baseline-main
+          path: performance-baseline.json
+          retention-days: 365
+
+      - name: Comment on PR with results
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            
+            try {
+              const report = JSON.parse(fs.readFileSync('performance-report.json', 'utf-8'));
+              const regressionsDetected = process.env.REGRESSIONS_DETECTED === 'true';
+              const regressionSeverity = process.env.REGRESSION_SEVERITY || 'none';
+              const regressionSummary = process.env.REGRESSION_SUMMARY || 'No regressions detected';
+              
+              let comment = '## 🚀 Performance Test Results\n\n';
+              
+              // Summary table
+              comment += '| Metric | Result |\n';
+              comment += '|--------|--------|\n';
+              comment += `| Total Tests | ${report.totalTests} |\n`;
+              comment += `| Passed | ${report.passedTests} ✅ |\n`;
+              comment += `| Failed | ${report.failedTests} ❌ |\n`;
+              comment += `| Success Rate | ${((report.passedTests / report.totalTests) * 100).toFixed(1)}% |\n`;
+              comment += `| Execution Time | ${report.totalExecutionTime.toFixed(2)}ms |\n\n`;
+              
+              // Category results
+              comment += '### 📊 Category Results\n\n';
+              comment += `- Pagination Performance: ${report.summary.paginationPerformance ? '✅ PASS' : '❌ FAIL'}\n`;
+              comment += `- Streaming Performance: ${report.summary.streamingPerformance ? '✅ PASS' : '❌ FAIL'}\n`;
+              comment += `- Concurrency Performance: ${report.summary.concurrencyPerformance ? '✅ PASS' : '❌ FAIL'}\n`;
+              comment += `- Memory Efficiency: ${report.summary.memoryEfficiency ? '✅ PASS' : '❌ FAIL'}\n\n`;
+              
+              // Regression status
+              if (regressionsDetected) {
+                const icon = regressionSeverity === 'critical' ? '🚨' : regressionSeverity === 'major' ? '⚠️' : '⚠️';
+                comment += `### ${icon} Performance Regressions Detected\n\n`;
+                comment += `**Status:** ${regressionSummary}\n\n`;
+                comment += 'Please review the performance changes before merging this PR.\n';
+              } else {
+                comment += '### ✅ No Performance Regressions\n\n';
+                comment += 'Performance is within acceptable thresholds.\n';
+              }
+              
+              // Detailed results
+              if (report.failedTests > 0) {
+                comment += '\n### ❌ Failed Tests\n\n';
+                report.results.filter(r => !r.passed).forEach(result => {
+                  comment += `- **${result.name}**: ${result.error || 'Thresholds not met'}\n`;
+                });
+              }
+              
+              // Performance metrics
+              comment += '\n### 📈 Performance Metrics\n\n';
+              report.results.filter(r => r.passed && r.metrics).forEach(result => {
+                comment += `**${result.name}**:\n`;
+                if (result.metrics.executionTime) {
+                  comment += `- Execution Time: ${result.metrics.executionTime.toFixed(2)}ms\n`;
+                }
+                if (result.metrics.memoryUsage) {
+                  comment += `- Memory Usage: ${(result.metrics.memoryUsage / 1024 / 1024).toFixed(2)}MB\n`;
+                }
+                if (result.metrics.itemsPerSecond) {
+                  comment += `- Items/Second: ${result.metrics.itemsPerSecond.toFixed(0)}\n`;
+                }
+                comment += '\n';
+              });
+              
+              // Find existing comment
+              const { data: comments } = await github.rest.issues.listComments({
+                issue_number: context.issue.number,
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+              });
+              
+              const existingComment = comments.find(comment => 
+                comment.body.includes('Performance Test Results') && 
+                comment.user.type === 'Bot'
+              );
+              
+              if (existingComment) {
+                await github.rest.issues.updateComment({
+                  comment_id: existingComment.id,
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  body: comment
+                });
+              } else {
+                await github.rest.issues.createComment({
+                  issue_number: context.issue.number,
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  body: comment
+                });
+              }
+              
+            } catch (error) {
+              console.error('Failed to generate performance comment:', error);
+            }
+
+      - name: Performance gate check
+        if: github.event_name == 'pull_request'
+        run: |
+          if [ "${{ steps.regression-detection.outputs.regressions_detected }}" == "true" ]; then
+            echo "❌ Performance regressions detected - blocking merge"
+            echo "::error::Performance regressions detected. Please review and fix before merging."
+            exit 1
+          else
+            echo "✅ No performance regressions - merge allowed"
+          fi
+
+  performance-trends:
+    name: Performance Trends Analysis
+    runs-on: ubuntu-latest
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    needs: performance-tests
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build project
+        run: pnpm run build
+
+      - name: Download historical performance data
+        uses: actions/github-script@v7
+        with:
+          script: |
+            // This would integrate with a performance tracking system
+            // For now, we'll just log that this step ran
+            console.log('📈 Performance trends analysis would run here');
+            console.log('This could integrate with systems like:');
+            console.log('- GitHub Actions artifacts');
+            console.log('- Performance monitoring services');
+            console.log('- Custom dashboards');
+
+      - name: Generate performance trends report
+        run: |
+          echo "📊 Generating performance trends report..."
+          echo "This would analyze historical performance data and identify trends"
+          echo "Potential integrations:"
+          echo "- Performance dashboards (Grafana, etc.)"
+          echo "- Alerting systems"
+          echo "- Performance SLA monitoring"
