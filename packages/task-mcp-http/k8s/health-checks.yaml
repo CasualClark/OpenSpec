@@ -1,0 +1,323 @@
+# Kubernetes health check configuration for Task MCP HTTP Server
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: task-mcp-health-config
+  namespace: default
+  labels:
+    app: task-mcp-http
+    component: health
+data:
+  # Health check configuration
+  health-config.yaml: |
+    # Health check timeouts and intervals
+    health:
+      timeout: 5000              # 5 seconds
+      cacheTimeout: 30000        # 30 seconds
+      enableCaching: true
+      gracePeriod: 10000         # 10 seconds
+      maxRetries: 3
+      retryDelay: 1000           # 1 second
+    
+    # Readiness probe configuration
+    readiness:
+      initialDelaySeconds: 10
+      periodSeconds: 30
+      timeoutSeconds: 5
+      successThreshold: 1
+      failureThreshold: 3
+    
+    # Liveness probe configuration
+    liveness:
+      initialDelaySeconds: 30
+      periodSeconds: 10
+      timeoutSeconds: 3
+      successThreshold: 1
+      failureThreshold: 3
+    
+    # Startup probe configuration
+    startup:
+      initialDelaySeconds: 5
+      periodSeconds: 10
+      timeoutSeconds: 5
+      successThreshold: 1
+      failureThreshold: 30
+
+---
+# Deployment with health checks
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: task-mcp-http
+  namespace: default
+  labels:
+    app: task-mcp-http
+    component: server
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: task-mcp-http
+      component: server
+  template:
+    metadata:
+      labels:
+        app: task-mcp-http
+        component: server
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8443"
+        prometheus.io/path: "/metrics"
+    spec:
+      containers:
+      - name: task-mcp-http
+        image: fission-ai/task-mcp-http:latest
+        ports:
+        - containerPort: 8443
+          name: https
+          protocol: TCP
+        env:
+        - name: NODE_ENV
+          value: "production"
+        - name: PORT
+          value: "8443"
+        - name: LOG_LEVEL
+          value: "info"
+        - name: TLS_CERT
+          valueFrom:
+            secretKeyRef:
+              name: task-mcp-tls
+              key: tls.crt
+        - name: TLS_KEY
+          valueFrom:
+            secretKeyRef:
+              name: task-mcp-tls
+              key: tls.key
+        - name: AUTH_TOKENS
+          valueFrom:
+            secretKeyRef:
+              name: task-mcp-auth
+              key: tokens
+        # Health check configuration from ConfigMap
+        - name: HEALTH_TIMEOUT
+          valueFrom:
+            configMapKeyRef:
+              name: task-mcp-health-config
+              key: health-config.yaml
+        # Resource limits for health monitoring
+        resources:
+          requests:
+            memory: "128Mi"
+            cpu: "100m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
+        # Health check probes
+        startupProbe:
+          httpGet:
+            path: /healthz
+            port: 8443
+            scheme: HTTPS
+          initialDelaySeconds: 5
+          periodSeconds: 10
+          timeoutSeconds: 5
+          successThreshold: 1
+          failureThreshold: 30
+        livenessProbe:
+          httpGet:
+            path: /healthz
+            port: 8443
+            scheme: HTTPS
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 3
+          successThreshold: 1
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /readyz
+            port: 8443
+            scheme: HTTPS
+          initialDelaySeconds: 10
+          periodSeconds: 30
+          timeoutSeconds: 5
+          successThreshold: 1
+          failureThreshold: 3
+        # Volume mounts for TLS certificates
+        volumeMounts:
+        - name: tls-certs
+          mountPath: /etc/tls
+          readOnly: true
+      volumes:
+      - name: tls-certs
+        secret:
+          secretName: task-mcp-tls
+      # Pod security context
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        fsGroup: 2000
+
+---
+# Service for HTTP(S) traffic
+apiVersion: v1
+kind: Service
+metadata:
+  name: task-mcp-http-service
+  namespace: default
+  labels:
+    app: task-mcp-http
+    component: server
+  annotations:
+    prometheus.io/scrape: "true"
+    prometheus.io/port: "8443"
+    prometheus.io/path: "/metrics"
+spec:
+  selector:
+    app: task-mcp-http
+    component: server
+  ports:
+  - name: https
+    port: 8443
+    targetPort: 8443
+    protocol: TCP
+  type: ClusterIP
+
+---
+# ServiceMonitor for Prometheus
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: task-mcp-http-monitor
+  namespace: default
+  labels:
+    app: task-mcp-http
+    component: monitoring
+spec:
+  selector:
+    matchLabels:
+      app: task-mcp-http
+  endpoints:
+  - port: https
+    path: /metrics
+    scheme: https
+    tlsConfig:
+      insecureSkipVerify: true
+    interval: 30s
+    scrapeTimeout: 10s
+
+---
+# HorizontalPodAutoscaler based on custom metrics
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: task-mcp-http-hpa
+  namespace: default
+  labels:
+    app: task-mcp-http
+    component: autoscaling
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: task-mcp-http
+  minReplicas: 3
+  maxReplicas: 10
+  metrics:
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: 70
+  - type: Resource
+    resource:
+      name: memory
+      target:
+        type: Utilization
+        averageUtilization: 80
+  # Custom metrics based on health status
+  - type: Pods
+    pods:
+      metric:
+        name: health_check_status
+        target:
+          type: AverageValue
+          averageValue: "0.8"
+  behavior:
+    scaleUp:
+      stabilizationWindowSeconds: 60
+      policies:
+      - type: Percent
+        value: 100
+        periodSeconds: 15
+    scaleDown:
+      stabilizationWindowSeconds: 300
+      policies:
+      - type: Percent
+        value: 10
+        periodSeconds: 60
+
+---
+# PodDisruptionBudget for availability
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: task-mcp-http-pdb
+  namespace: default
+  labels:
+    app: task-mcp-http
+    component: availability
+spec:
+  minAvailable: 2
+  selector:
+    matchLabels:
+      app: task-mcp-http
+      component: server
+
+---
+# NetworkPolicy for security
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: task-mcp-http-netpol
+  namespace: default
+  labels:
+    app: task-mcp-http
+    component: security
+spec:
+  podSelector:
+    matchLabels:
+      app: task-mcp-http
+  policyTypes:
+  - Ingress
+  - Egress
+  ingress:
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          name: ingress-nginx
+    ports:
+    - protocol: TCP
+      port: 8443
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          name: monitoring
+    ports:
+    - protocol: TCP
+      port: 8443
+  egress:
+  - to: []
+    ports:
+    - protocol: TCP
+      port: 53
+    - protocol: UDP
+      port: 53
+  - to: []
+    ports:
+    - protocol: TCP
+      port: 443
+    - protocol: TCP
+      port: 80

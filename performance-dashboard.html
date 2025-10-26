@@ -1,0 +1,578 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OpenSpec Performance Dashboard</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+            overflow: hidden;
+        }
+        
+        .header {
+            background: linear-gradient(135deg, #2c3e50 0%, #34495e 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+        
+        .header h1 {
+            font-size: 2.5rem;
+            margin-bottom: 10px;
+            font-weight: 700;
+        }
+        
+        .header p {
+            opacity: 0.9;
+            font-size: 1.1rem;
+        }
+        
+        .timestamp {
+            background: rgba(255,255,255,0.1);
+            padding: 8px 16px;
+            border-radius: 20px;
+            display: inline-block;
+            margin-top: 15px;
+            font-size: 0.9rem;
+        }
+        
+        .summary-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 20px;
+            padding: 30px;
+            background: #f8f9fa;
+        }
+        
+        .summary-card {
+            background: white;
+            padding: 25px;
+            border-radius: 12px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            text-align: center;
+            transition: transform 0.2s;
+        }
+        
+        .summary-card:hover {
+            transform: translateY(-5px);
+        }
+        
+        .summary-card h3 {
+            color: #2c3e50;
+            margin-bottom: 10px;
+            font-size: 1.1rem;
+        }
+        
+        .summary-card .value {
+            font-size: 2.5rem;
+            font-weight: 700;
+            margin: 10px 0;
+        }
+        
+        .summary-card .unit {
+            color: #7f8c8d;
+            font-size: 0.9rem;
+        }
+        
+        .success { color: #27ae60; }
+        .danger { color: #e74c3c; }
+        .warning { color: #f39c12; }
+        .info { color: #3498db; }
+        
+        .charts-section {
+            padding: 30px;
+        }
+        
+        .charts-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(500px, 1fr));
+            gap: 30px;
+            margin-top: 20px;
+        }
+        
+        .chart-card {
+            background: white;
+            padding: 25px;
+            border-radius: 12px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+        
+        .chart-card h3 {
+            color: #2c3e50;
+            margin-bottom: 20px;
+            font-size: 1.3rem;
+        }
+        
+        .chart-container {
+            position: relative;
+            height: 300px;
+        }
+        
+        .test-results {
+            padding: 30px;
+        }
+        
+        .test-results h2 {
+            color: #2c3e50;
+            margin-bottom: 20px;
+            font-size: 1.5rem;
+        }
+        
+        .test-item {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 15px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .test-item.passed {
+            border-left: 4px solid #27ae60;
+        }
+        
+        .test-item.failed {
+            border-left: 4px solid #e74c3c;
+        }
+        
+        .test-name {
+            font-weight: 600;
+            color: #2c3e50;
+        }
+        
+        .test-metrics {
+            display: flex;
+            gap: 20px;
+            align-items: center;
+        }
+        
+        .metric {
+            text-align: center;
+        }
+        
+        .metric-value {
+            font-weight: 700;
+            color: #2c3e50;
+        }
+        
+        .metric-label {
+            font-size: 0.8rem;
+            color: #7f8c8d;
+        }
+        
+        .status-badge {
+            padding: 6px 12px;
+            border-radius: 20px;
+            font-size: 0.8rem;
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+        
+        .status-badge.passed {
+            background: #d4edda;
+            color: #155724;
+        }
+        
+        .status-badge.failed {
+            background: #f8d7da;
+            color: #721c24;
+        }
+        
+        .environment-info {
+            background: #ecf0f1;
+            padding: 20px;
+            border-radius: 8px;
+            margin: 20px 30px;
+            font-family: 'Courier New', monospace;
+            font-size: 0.9rem;
+        }
+        
+        .environment-info h3 {
+            color: #2c3e50;
+            margin-bottom: 10px;
+        }
+        
+        .environment-info p {
+            margin: 5px 0;
+        }
+        
+        @media (max-width: 768px) {
+            .charts-grid {
+                grid-template-columns: 1fr;
+            }
+            
+            .summary-grid {
+                grid-template-columns: 1fr;
+            }
+            
+            .test-item {
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 15px;
+            }
+            
+            .test-metrics {
+                width: 100%;
+                justify-content: space-between;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🚀 OpenSpec Performance Dashboard</h1>
+            <p>Real-time performance monitoring and analysis</p>
+            <div class="timestamp">Generated: 10/24/2025, 6:23:33 PM</div>
+        </div>
+        
+        <div class="summary-grid">
+            <div class="summary-card">
+                <h3>Total Tests</h3>
+                <div class="value info">4</div>
+                <div class="unit">tests run</div>
+            </div>
+            
+            <div class="summary-card">
+                <h3>Success Rate</h3>
+                <div class="value success">
+                    100.0%
+                </div>
+                <div class="unit">4/4 passed</div>
+            </div>
+            
+            <div class="summary-card">
+                <h3>Total Execution Time</h3>
+                <div class="value info">8.30</div>
+                <div class="unit">seconds</div>
+            </div>
+            
+            <div class="summary-card">
+                <h3>Environment</h3>
+                <div class="value" style="font-size: 1.2rem;">linux</div>
+                <div class="unit">v24.10.0</div>
+            </div>
+        </div>
+        
+        <div class="environment-info">
+            <h3>🖥️ Environment Details</h3>
+            <p><strong>Node.js:</strong> v24.10.0</p>
+            <p><strong>Platform:</strong> linux</p>
+            <p><strong>Test Timestamp:</strong> 10/24/2025, 6:23:19 PM</p>
+            
+        </div>
+        
+        <div class="charts-section">
+            <h2 style="color: #2c3e50; margin-bottom: 10px;">📊 Performance Metrics</h2>
+            
+            <div class="charts-grid">
+                <div class="chart-card">
+                    <h3>Execution Time by Test</h3>
+                    <div class="chart-container">
+                        <canvas id="executionTimeChart"></canvas>
+                    </div>
+                </div>
+                
+                <div class="chart-card">
+                    <h3>Memory Usage by Test</h3>
+                    <div class="chart-container">
+                        <canvas id="memoryChart"></canvas>
+                    </div>
+                </div>
+                
+                <div class="chart-card">
+                    <h3>Throughput (Items/Second)</h3>
+                    <div class="chart-container">
+                        <canvas id="throughputChart"></canvas>
+                    </div>
+                </div>
+                
+                <div class="chart-card">
+                    <h3>Test Success Rate</h3>
+                    <div class="chart-container">
+                        <canvas id="successRateChart"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="test-results">
+            <h2>📋 Detailed Test Results</h2>
+            
+            
+                <div class="test-item passed">
+                    <div>
+                        <div class="test-name">pagination-1000-changes</div>
+                        
+                    </div>
+                    <div class="test-metrics">
+                        
+                            <div class="metric">
+                                <div class="metric-value">124.34ms</div>
+                                <div class="metric-label">Time</div>
+                            </div>
+                        
+                        
+                        
+                            <div class="metric">
+                                <div class="metric-value">4.87MB</div>
+                                <div class="metric-label">Memory</div>
+                            </div>
+                        
+                        
+                        
+                            <div class="metric">
+                                <div class="metric-value">9672</div>
+                                <div class="metric-label">Items/sec</div>
+                            </div>
+                        
+                        
+                        <div class="status-badge passed">
+                            Passed
+                        </div>
+                    </div>
+                </div>
+            
+                <div class="test-item passed">
+                    <div>
+                        <div class="test-name">streaming-100mb</div>
+                        
+                    </div>
+                    <div class="test-metrics">
+                        
+                            <div class="metric">
+                                <div class="metric-value">1765.02ms</div>
+                                <div class="metric-label">Time</div>
+                            </div>
+                        
+                        
+                        
+                            <div class="metric">
+                                <div class="metric-value">5.40MB</div>
+                                <div class="metric-label">Memory</div>
+                            </div>
+                        
+                        
+                        
+                            <div class="metric">
+                                <div class="metric-value">57</div>
+                                <div class="metric-label">Items/sec</div>
+                            </div>
+                        
+                        
+                        <div class="status-badge passed">
+                            Passed
+                        </div>
+                    </div>
+                </div>
+            
+                <div class="test-item passed">
+                    <div>
+                        <div class="test-name">concurrency-10-requests</div>
+                        
+                    </div>
+                    <div class="test-metrics">
+                        
+                            <div class="metric">
+                                <div class="metric-value">147.41ms</div>
+                                <div class="metric-label">Time</div>
+                            </div>
+                        
+                        
+                        
+                        
+                        
+                        
+                        <div class="status-badge passed">
+                            Passed
+                        </div>
+                    </div>
+                </div>
+            
+                <div class="test-item passed">
+                    <div>
+                        <div class="test-name">memory-efficiency</div>
+                        
+                    </div>
+                    <div class="test-metrics">
+                        
+                        
+                        
+                        
+                        
+                        
+                        <div class="status-badge passed">
+                            Passed
+                        </div>
+                    </div>
+                </div>
+            
+        </div>
+    </div>
+    
+    <script>
+        // Chart data
+        const testData = [{"name":"pagination-1000-changes","passed":true,"executionTime":124.34230280000001,"memoryUsage":5107696,"metrics":{"executionTime":124.34230280000001,"memoryBefore":{"heapUsed":4988336,"heapTotal":7663616,"external":1909099,"rss":53975449.6,"heapUsedPercent":65.09115279262427,"timestamp":1761348192279},"memoryAfter":{"heapUsed":5020846.4,"heapTotal":7663616,"external":1909099,"rss":54027878.4,"heapUsedPercent":65.5153702899519,"timestamp":1761348192279},"peakMemory":{"heapUsed":5107696,"heapTotal":6824755.2,"external":1909099,"rss":53608448,"heapUsedPercent":75.09733512504695,"timestamp":1761348192279},"itemsProcessed":1200,"itemsPerSecond":9672.374656890115,"memoryPerItem":27.092000000000002,"customMetrics":{}}},{"name":"streaming-100mb","passed":true,"executionTime":1765.0211336666664,"memoryUsage":5666056,"metrics":{"executionTime":1765.0211336666664,"memoryBefore":{"heapUsed":5398917.333333333,"heapTotal":7925760,"external":1876868,"rss":55749290.666666664,"heapUsedPercent":68.11860734280792,"timestamp":1761348199346},"memoryAfter":{"heapUsed":5284898.666666667,"heapTotal":7925760,"external":1876868,"rss":57647104,"heapUsedPercent":66.68002395564169,"timestamp":1761348199346},"peakMemory":{"heapUsed":5666056,"heapTotal":7925760,"external":1876868,"rss":55836672,"heapUsedPercent":71.4891190245478,"timestamp":1761348199346},"itemsProcessed":100,"itemsPerSecond":56.65674229742749,"memoryPerItem":-1140.1866666666667,"customMetrics":{}}},{"name":"concurrency-10-requests","passed":true,"executionTime":147.41065410000002,"memoryUsage":0,"metrics":{"totalTime":246.94823299999916,"avgTime":147.41065410000002,"maxTime":246.76437299999998,"executionTimes":[98.26029500000004,215.49687499999982,121.6889000000001,143.89325000000008,116.5212790000005,202.26595400000042,53.807590999999775,168.06849199999942,246.76437299999998,107.33953199999996]}},{"name":"memory-efficiency","passed":true,"executionTime":0,"memoryUsage":-421888,"metrics":{"initialMemory":{"rss":61267968,"heapTotal":7925760,"heapUsed":5041504,"external":1876868,"arrayBuffers":10519},"finalMemory":{"rss":175161344,"heapTotal":142667776,"heapUsed":4619616,"external":1876832,"arrayBuffers":10483},"memoryGrowth":-421888}}];
+        const baselineData = null;
+        
+        // Prepare chart data
+        const testNames = testData.map(test => test.name.replace(/-/g, ' ').replace(/\b\w/g, l => l.toUpperCase()));
+        const executionTimes = testData.map(test => test.executionTime || 0);
+        const memoryUsage = testData.map(test => test.memoryUsage / 1024 / 1024 || 0); // Convert to MB
+        const throughput = testData.map(test => test.metrics?.itemsPerSecond || 0);
+        const successRates = testData.map(test => test.passed ? 100 : 0);
+        
+        // Chart configuration
+        const chartOptions = {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    display: false
+                }
+            },
+            scales: {
+                y: {
+                    beginAtZero: true
+                }
+            }
+        };
+        
+        // Execution Time Chart
+        new Chart(document.getElementById('executionTimeChart'), {
+            type: 'bar',
+            data: {
+                labels: testNames,
+                datasets: [{
+                    label: 'Execution Time (ms)',
+                    data: executionTimes,
+                    backgroundColor: executionTimes.map(time => time > 200 ? '#e74c3c' : '#3498db'),
+                    borderColor: executionTimes.map(time => time > 200 ? '#c0392b' : '#2980b9'),
+                    borderWidth: 1
+                }]
+            },
+            options: {
+                ...chartOptions,
+                scales: {
+                    ...chartOptions.scales,
+                    y: {
+                        ...chartOptions.scales.y,
+                        title: {
+                            display: true,
+                            text: 'Time (ms)'
+                        }
+                    }
+                }
+            }
+        });
+        
+        // Memory Usage Chart
+        new Chart(document.getElementById('memoryChart'), {
+            type: 'bar',
+            data: {
+                labels: testNames,
+                datasets: [{
+                    label: 'Memory Usage (MB)',
+                    data: memoryUsage,
+                    backgroundColor: memoryUsage.map(mem => mem > 50 ? '#e74c3c' : '#27ae60'),
+                    borderColor: memoryUsage.map(mem => mem > 50 ? '#c0392b' : '#229954'),
+                    borderWidth: 1
+                }]
+            },
+            options: {
+                ...chartOptions,
+                scales: {
+                    ...chartOptions.scales,
+                    y: {
+                        ...chartOptions.scales.y,
+                        title: {
+                            display: true,
+                            text: 'Memory (MB)'
+                        }
+                    }
+                }
+            }
+        });
+        
+        // Throughput Chart
+        new Chart(document.getElementById('throughputChart'), {
+            type: 'bar',
+            data: {
+                labels: testNames,
+                datasets: [{
+                    label: 'Items per Second',
+                    data: throughput,
+                    backgroundColor: '#f39c12',
+                    borderColor: '#e67e22',
+                    borderWidth: 1
+                }]
+            },
+            options: {
+                ...chartOptions,
+                scales: {
+                    ...chartOptions.scales,
+                    y: {
+                        ...chartOptions.scales.y,
+                        title: {
+                            display: true,
+                            text: 'Items/Second'
+                        }
+                    }
+                }
+            }
+        });
+        
+        // Success Rate Chart
+        new Chart(document.getElementById('successRateChart'), {
+            type: 'doughnut',
+            data: {
+                labels: ['Passed', 'Failed'],
+                datasets: [{
+                    data: [
+                        testData.filter(test => test.passed).length,
+                        testData.filter(test => !test.passed).length
+                    ],
+                    backgroundColor: ['#27ae60', '#e74c3c'],
+                    borderColor: ['#229954', '#c0392b'],
+                    borderWidth: 1
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: {
+                        position: 'bottom'
+                    }
+                }
+            }
+        });
+        
+        // Auto-refresh every 5 minutes
+        setTimeout(() => {
+            console.log('Dashboard auto-refresh enabled');
+        }, 300000);
+    </script>
+</body>
+</html>

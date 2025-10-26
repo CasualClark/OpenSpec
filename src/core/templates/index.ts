@@ -4,6 +4,13 @@ import { claudeTemplate } from './claude-template.js';
 import { clineTemplate } from './cline-template.js';
 import { agentsRootStubTemplate } from './agents-root-stub.js';
 import { getSlashCommandBody, SlashCommandId } from './slash-command-templates.js';
+import { 
+  ChangeTemplateManager, 
+  ChangeTemplateContext, 
+  ChangeTemplate,
+  changeTemplates,
+  validateSecurePath 
+} from './change-templates.js';
 
 export interface Template {
   path: string;
@@ -40,6 +47,15 @@ export class TemplateManager {
     return getSlashCommandBody(id);
   }
 }
+
+// Change template management
+export { 
+  ChangeTemplateManager, 
+  ChangeTemplateContext, 
+  ChangeTemplate,
+  changeTemplates,
+  validateSecurePath 
+} from './change-templates.js';
 
 export { ProjectContext } from './project-template.js';
 export type { SlashCommandId } from './slash-command-templates.js';

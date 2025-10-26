@@ -1,0 +1,26 @@
+{
+  "apiVersion": "1.0",
+  "kind": "OpenSpec",
+  "metadata": {
+    "name": "sample-repo",
+    "description": "Sample repository for Task MCP demonstration",
+    "version": "1.0.0"
+  },
+  "spec": {
+    "changeTemplates": {
+      "feature": "/templates/proposal_feature.md",
+      "bugfix": "/templates/proposal_bugfix.md", 
+      "chore": "/templates/proposal_chore.md"
+    },
+    "taskTemplates": {
+      "feature": "/templates/tasks_feature.md",
+      "bugfix": "/templates/tasks_bugfix.md",
+      "chore": "/templates/tasks_chore.md"
+    },
+    "directories": {
+      "changes": "openspec/changes",
+      "templates": "/templates"
+    },
+    "slugPattern": "^[a-z0-9](?:[a-z0-9\\-]{1,62})[a-z0-9]$"
+  }
+}

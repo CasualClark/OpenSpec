@@ -1,0 +1,46 @@
+# Task MCP HTTP Server - Development Dockerfile
+# Optimized for development with hot reload and debugging
+
+FROM node:20-alpine
+
+# Set environment variables
+ENV NODE_ENV=development
+ENV PNPM_HOME="/pnpm"
+ENV PATH="$PNPM_HOME:$PATH"
+
+# Install development dependencies
+RUN apk add --no-cache \
+    curl \
+    git \
+    bash \
+    vim \
+    && rm -rf /var/cache/apk/*
+
+# Install pnpm
+RUN corepack enable pnpm
+
+# Create app directory
+WORKDIR /app
+
+# Copy package files
+COPY package.json pnpm-lock.yaml ./
+
+# Install all dependencies including dev dependencies
+RUN pnpm install
+
+# Copy source code
+COPY . .
+
+# Create logs directory
+RUN mkdir -p logs
+
+# Expose ports
+EXPOSE 3000
+EXPOSE 9229
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
+    CMD curl -f http://localhost:3000/healthz || exit 1
+
+# Default command for development with hot reload
+CMD ["pnpm", "run", "start:dev"]

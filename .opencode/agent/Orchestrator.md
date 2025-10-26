@@ -2,7 +2,8 @@
 name: Orchestrator
 description: Plans work from specs, decomposes into parallel tasks, delegates, and tracks progress
 mode: primary
-model: zai-coding-plan/glm-4.6
+#model: zai-coding-plan/glm-4.6
+model: chutes/zai-org/GLM-4.6-FP8
 temperature: 0.6
 permission:
   edit: deny

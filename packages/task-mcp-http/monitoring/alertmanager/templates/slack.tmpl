@@ -1,0 +1,173 @@
+{{ define "slack.default.title" }}
+{{ range .Alerts }}
+{{ .Annotations.summary }}
+{{ end }}
+{{ end }}
+
+{{ define "slack.critical" }}
+🚨 **CRITICAL ALERT** 🚨
+
+*Alert:* {{ .GroupLabels.alertname }}
+*Service:* Task MCP HTTP Server
+
+{{ range .Alerts }}
+*Description:* {{ .Annotations.description }}
+
+*Labels:*
+{{ range .Labels.SortedPairs }}• {{ .Name }}: {{ .Value }}
+{{ end }}
+
+*Runbook:* {{ .Annotations.runbook_url }}
+*Dashboard:* {{ .Annotations.dashboard_url }}
+
+*Started:* {{ .StartsAt.Format "2006-01-02 15:04:05" }}
+{{ if .EndsAt }}*Resolved:* {{ .EndsAt.Format "2006-01-02 15:04:05" }}{{ end }}
+---
+{{ end }}
+
+{{ if gt (len .Alerts.Resolved) 0 }}
+✅ *{{ len .Alerts.Resolved }} alert(s) resolved*
+{{ end }}
+{{ end }}
+
+{{ define "slack.warning" }}
+⚠️ **WARNING ALERT**
+
+*Alert:* {{ .GroupLabels.alertname }}
+*Service:* Task MCP HTTP Server
+
+{{ range .Alerts }}
+*Description:* {{ .Annotations.description }}
+
+*Labels:*
+{{ range .Labels.SortedPairs }}• {{ .Name }}: {{ .Value }}
+{{ end }}
+
+*Dashboard:* {{ .Annotations.dashboard_url }}
+
+*Started:* {{ .StartsAt.Format "2006-01-02 15:04:05" }}
+{{ if .EndsAt }}*Resolved:* {{ .EndsAt.Format "2006-01-02 15:04:05" }}{{ end }}
+---
+{{ end }}
+
+{{ if gt (len .Alerts.Resolved) 0 }}
+✅ *{{ len .Alerts.Resolved }} alert(s) resolved*
+{{ end }}
+{{ end }}
+
+{{ define "slack.infrastructure" }}
+🔧 **INFRASTRUCTURE ALERT**
+
+*Alert:* {{ .GroupLabels.alertname }}
+*Service:* Task MCP HTTP Server
+
+{{ range .Alerts }}
+*Description:* {{ .Annotations.description }}
+
+*Instance:* {{ .Labels.instance }}
+*Component:* {{ .Labels.component }}
+
+*Dashboard:* {{ .Annotations.dashboard_url }}
+
+*Started:* {{ .StartsAt.Format "2006-01-02 15:04:05" }}
+{{ if .EndsAt }}*Resolved:* {{ .EndsAt.Format "2006-01-02 15:04:05" }}{{ end }}
+---
+{{ end }}
+
+{{ if gt (len .Alerts.Resolved) 0 }}
+✅ *{{ len .Alerts.Resolved }} alert(s) resolved*
+{{ end }}
+{{ end }}
+
+{{ define "slack.security" }}
+🔒 **SECURITY ALERT**
+
+*Alert:* {{ .GroupLabels.alertname }}
+*Service:* Task MCP HTTP Server
+
+{{ range .Alerts }}
+*Description:* {{ .Annotations.description }}
+
+*Source IP:* {{ .Labels.source_ip }}
+*User:* {{ .Labels.user }}
+*Action:* {{ .Labels.action }}
+
+*Dashboard:* {{ .Annotations.dashboard_url }}
+
+*Started:* {{ .StartsAt.Format "2006-01-02 15:04:05" }}
+{{ if .EndsAt }}*Resolved:* {{ .EndsAt.Format "2006-01-02 15:04:05" }}{{ end }}
+---
+{{ end }}
+
+{{ if gt (len .Alerts.Resolved) 0 }}
+✅ *{{ len .Alerts.Resolved }} alert(s) resolved*
+{{ end }}
+{{ end }}
+
+{{ define "slack.business" }}
+📊 **BUSINESS ALERT**
+
+*Alert:* {{ .GroupLabels.alertname }}
+*Service:* Task MCP HTTP Server
+
+{{ range .Alerts }}
+*Description:* {{ .Annotations.description }}
+
+*Impact:* {{ .Labels.impact }}
+*Metric:* {{ .Labels.metric }}
+
+*Dashboard:* {{ .Annotations.dashboard_url }}
+
+*Started:* {{ .StartsAt.Format "2006-01-02 15:04:05" }}
+{{ if .EndsAt }}*Resolved:* {{ .EndsAt.Format "2006-01-02 15:04:05" }}{{ end }}
+---
+{{ end }}
+
+{{ if gt (len .Alerts.Resolved) 0 }}
+✅ *{{ len .Alerts.Resolved }} alert(s) resolved*
+{{ end }}
+{{ end }}
+
+{{ define "slack.slo" }}
+📈 **SLO ALERT**
+
+*Alert:* {{ .GroupLabels.alertname }}
+*Service:* Task MCP HTTP Server
+
+{{ range .Alerts }}
+*Description:* {{ .Annotations.description }}
+
+*SLO:* {{ .Labels.slo }}
+*Burn Rate:* {{ .Labels.burn_rate }}
+*Error Budget:* {{ .Value | humanizePercentage }}
+
+*Dashboard:* {{ .Annotations.dashboard_url }}
+
+*Started:* {{ .StartsAt.Format "2006-01-02 15:04:05" }}
+{{ if .EndsAt }}*Resolved:* {{ .EndsAt.Format "2006-01-02 15:04:05" }}{{ end }}
+---
+{{ end }}
+
+{{ if gt (len .Alerts.Resolved) 0 }}
+✅ *{{ len .Alerts.Resolved }} alert(s) resolved*
+{{ end }}
+{{ end }}
+
+{{ define "slack.info" }}
+ℹ️ **INFO ALERT**
+
+*Alert:* {{ .GroupLabels.alertname }}
+*Service:* Task MCP HTTP Server
+
+{{ range .Alerts }}
+*Description:* {{ .Annotations.description }}
+
+*Started:* {{ .StartsAt.Format "2006-01-02 15:04:05" }}
+{{ if .EndsAt }}*Resolved:* {{ .EndsAt.Format "2006-01-02 15:04:05" }}{{ end }}
+---
+{{ end }}
+
+{{ if gt (len .Alerts.Resolved) 0 }}
+✅ *{{ len .Alerts.Resolved }} alert(s) resolved*
+{{ end }}
+{{ end }}

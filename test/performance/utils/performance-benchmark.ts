@@ -67,6 +67,8 @@ export interface BenchmarkResult {
   thresholdsMet: boolean;
   /** Configuration used */
   config: Required<BenchmarkConfig>;
+  /** Raw data from the operation */
+  data?: any;
 }
 
 /**
@@ -94,7 +96,7 @@ export class PerformanceBenchmark {
     operation: () => Promise<T> | T,
     itemCount: number = 1,
     config: BenchmarkConfig = {}
-  ): Promise<BenchmarkResult> {
+  ): Promise<BenchmarkResult & { data: T }> {
     const finalConfig: Required<BenchmarkConfig> = {
       warmupIterations: config.warmupIterations || 3,
       iterations: config.iterations || 10,
@@ -133,8 +135,11 @@ export class PerformanceBenchmark {
 
     // Calculate statistics
     const result = this.calculateResult(name, finalConfig);
+    
+    // Get the actual operation result for the last iteration
+    const lastOperationResult = await operation();
 
-    return result;
+    return { ...result, data: lastOperationResult };
   }
 
   /**
@@ -350,7 +355,7 @@ export class ConcurrencyTester {
    * Test concurrent execution of an operation
    */
   static async testConcurrency<T>(
-    operation: () => Promise<T> | T,
+    operation: (() => Promise<T> | T) | ((index: number) => Promise<T> | T),
     concurrency: number = 10,
     timeout: number = 30000
   ): Promise<{
@@ -364,7 +369,15 @@ export class ConcurrencyTester {
     const promises: Promise<{ result?: T; error?: Error; executionTime: number }>[] = [];
     
     for (let i = 0; i < concurrency; i++) {
-      promises.push(this.timedOperation(operation, timeout));
+      // Create a wrapper that works with both function signatures
+      const wrappedOperation = async () => {
+        if (typeof operation === 'function' && operation.length === 1) {
+          return await (operation as (index: number) => Promise<T> | T)(i);
+        } else {
+          return await (operation as () => Promise<T> | T)();
+        }
+      };
+      promises.push(this.timedOperation(wrappedOperation, timeout));
     }
 
     const completed = await Promise.allSettled(promises);

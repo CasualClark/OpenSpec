@@ -1,0 +1,168 @@
+# Task MCP HTTP Server - Development Docker Compose
+# Development environment with hot reload and debugging
+
+version: '3.8'
+
+services:
+  # Task MCP HTTP Backend (Development)
+  task-mcp-backend:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    container_name: task-mcp-backend-dev
+    restart: unless-stopped
+    environment:
+      - NODE_ENV=development
+      - PORT=3000
+      - HOST=0.0.0.0
+      - LOG_LEVEL=debug
+      - RATE_LIMIT_REQUESTS_PER_MINUTE=100
+      - CORS_ORIGIN=*
+      - TLS_ENABLED=false
+      - AUTH_REQUIRED=false  # Disabled for development
+      - AUDIT_LOG_ENABLED=true
+      - HEALTH_CHECK_ENABLED=true
+      - DEBUG=task-mcp:*
+    volumes:
+      - .:/app
+      - /app/node_modules
+      - ./logs:/app/logs
+      - ./ssl:/app/ssl:ro
+    networks:
+      - task-mcp-dev-network
+    ports:
+      - "3000:3000"  # Direct access for debugging
+      - "9229:9229"  # Node.js debugger
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/healthz"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    depends_on:
+      - redis
+    command: npm run start:dev
+
+  # Redis for development
+  redis:
+    image: redis:7-alpine
+    container_name: task-mcp-redis-dev
+    restart: unless-stopped
+    command: redis-server --appendonly yes --maxmemory 128mb --maxmemory-policy allkeys-lru
+    volumes:
+      - redis-dev-data:/data
+      - ./redis/redis-dev.conf:/usr/local/etc/redis/redis.conf:ro
+    networks:
+      - task-mcp-dev-network
+    ports:
+      - "6379:6379"  # Direct access for debugging
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Nginx Development Proxy
+  nginx:
+    image: nginx:alpine
+    container_name: task-mcp-nginx-dev
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/conf.d:/etc/nginx/conf.d:ro
+      - ./nginx/sites-available:/etc/nginx/sites-available:ro
+      - ./nginx/sites-enabled:/etc/nginx/sites-enabled:ro
+      - ./ssl:/etc/nginx/ssl:ro
+      - ./logs/nginx:/var/log/nginx
+      - ./static:/var/www/task-mcp/static:ro
+    networks:
+      - task-mcp-dev-network
+    depends_on:
+      - task-mcp-backend
+      - redis
+    healthcheck:
+      test: ["CMD", "nginx", "-t"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Development tools
+  adminer:
+    image: adminer:latest
+    container_name: task-mcp-adminer-dev
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    networks:
+      - task-mcp-dev-network
+    profiles:
+      - tools
+
+  # Redis Commander (Redis GUI)
+  redis-commander:
+    image: rediscommander/redis-commander:latest
+    container_name: task-mcp-redis-commander-dev
+    restart: unless-stopped
+    environment:
+      - REDIS_HOSTS=local:redis:6379
+    ports:
+      - "8081:8081"
+    networks:
+      - task-mcp-dev-network
+    depends_on:
+      - redis
+    profiles:
+      - tools
+
+  # Development mail server (for testing email notifications)
+  mailhog:
+    image: mailhog/mailhog:latest
+    container_name: task-mcp-mailhog-dev
+    restart: unless-stopped
+    ports:
+      - "1025:1025"  # SMTP
+      - "8025:8025"  # Web UI
+    networks:
+      - task-mcp-dev-network
+    profiles:
+      - tools
+
+  # Development database (if needed)
+  postgres:
+    image: postgres:15-alpine
+    container_name: task-mcp-postgres-dev
+    restart: unless-stopped
+    environment:
+      - POSTGRES_DB=task_mcp_dev
+      - POSTGRES_USER=dev_user
+      - POSTGRES_PASSWORD=dev_password
+    volumes:
+      - postgres-dev-data:/var/lib/postgresql/data
+      - ./database/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    networks:
+      - task-mcp-dev-network
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U dev_user -d task_mcp_dev"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    profiles:
+      - database
+
+networks:
+  task-mcp-dev-network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.21.0.0/16
+
+volumes:
+  redis-dev-data:
+    driver: local
+  postgres-dev-data:
+    driver: local

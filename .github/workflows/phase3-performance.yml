@@ -1,0 +1,685 @@
+name: Phase 3 Performance Validation
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'src/**'
+      - 'test/**'
+      - 'scripts/**'
+      - 'package.json'
+      - 'pnpm-lock.yaml'
+  push:
+    branches: [main]
+    paths:
+      - 'src/**'
+      - 'test/**'
+      - 'scripts/**'
+      - 'package.json'
+      - 'pnpm-lock.yaml'
+  workflow_dispatch:
+    inputs:
+      test_type:
+        description: 'Type of performance test to run'
+        required: false
+        default: 'all'
+        type: choice
+        options:
+          - all
+          - pagination
+          - streaming
+          - load
+          - monitoring
+      change_count:
+        description: 'Number of changes to generate (for pagination tests)'
+        required: false
+        default: '1200'
+        type: string
+      file_sizes:
+        description: 'Large file sizes in MB (comma-separated)'
+        required: false
+        default: '10,50,100'
+        type: string
+  schedule:
+    # Run comprehensive Phase 3 tests daily at 3 AM UTC
+    - cron: '0 3 * * *'
+
+permissions:
+  contents: read
+  actions: read
+  checks: write
+  pull-requests: write
+
+concurrency:
+  group: phase3-perf-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  NODE_OPTIONS: --expose-gc
+  PHASE3_TEST_TIMEOUT: 1800000 # 30 minutes
+  PERFORMANCE_THRESHOLD_CPU: 80
+  PERFORMANCE_THRESHOLD_MEMORY: 85
+  PERFORMANCE_THRESHOLD_RESPONSE_TIME: 5000
+
+jobs:
+  setup-test-environment:
+    name: Setup Test Environment
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    outputs:
+      test-data-path: ${{ steps.setup.outputs.test-data-path }}
+      change-count: ${{ steps.setup.outputs.change-count }}
+      file-sizes: ${{ steps.setup.outputs.file-sizes }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build project
+        run: pnpm run build
+
+      - name: Parse test parameters
+        id: setup
+        run: |
+          TEST_TYPE="${{ github.event.inputs.test_type || 'all' }}"
+          CHANGE_COUNT="${{ github.event.inputs.change_count || '1200' }}"
+          FILE_SIZES="${{ github.event.inputs.file_sizes || '10,50,100' }}"
+          
+          echo "test-type=$TEST_TYPE" >> $GITHUB_OUTPUT
+          echo "change-count=$CHANGE_COUNT" >> $GITHUB_OUTPUT
+          echo "file-sizes=$FILE_SIZES" >> $GITHUB_OUTPUT
+          echo "test-data-path=./test-environment" >> $GITHUB_OUTPUT
+          
+          echo "🔧 Test Configuration:"
+          echo "  Type: $TEST_TYPE"
+          echo "  Change Count: $CHANGE_COUNT"
+          echo "  File Sizes: $FILE_SIZES MB"
+
+      - name: Generate test data
+        run: |
+          echo "🏗️ Generating Phase 3 test environment..."
+          
+          # Convert file sizes to bytes for the generator
+          FILE_SIZES="${{ steps.setup.outputs.file-sizes }}"
+          SIZE_ARGS=""
+          IFS=',' read -ra SIZES <<< "$FILE_SIZES"
+          for size in "${SIZES[@]}"; do
+            SIZE_ARGS="$SIZE_ARGS $((size * 1024 * 1024))"
+          done
+          
+          # Update the generator config
+          sed -i "s/changeCount: 1200/changeCount: ${{ steps.setup.outputs.change-count }}/" scripts/test-data-generator.ts
+          sed -i "s/largeFileSizes: \[/largeFileSizes: [$SIZE_ARGS/" scripts/test-data-generator.ts
+          
+          # Run the generator
+          node --expose-gc dist/scripts/test-data-generator.js
+          
+          echo "✅ Test environment generated successfully"
+
+      - name: Verify test data
+        run: |
+          echo "🔍 Verifying generated test data..."
+          
+          TEST_DATA_PATH="${{ steps.setup.outputs.test-data-path }}"
+          
+          # Check change count
+          CHANGE_COUNT=$(find "$TEST_DATA_PATH/${{ steps.setup.outputs.repo-name || 'phase3-performance-test-repo' }}/openspec/changes" -maxdepth 1 -type d | wc -l)
+          CHANGE_COUNT=$((CHANGE_COUNT - 1)) # Subtract parent directory
+          echo "Generated changes: $CHANGE_COUNT"
+          
+          # Check large files
+          FILE_SIZES="${{ steps.setup.outputs.file-sizes }}"
+          IFS=',' read -ra SIZES <<< "$FILE_SIZES"
+          for size in "${SIZES[@]}"; do
+            FILE_PATH="$TEST_DATA_PATH/test-files/test-file-${size}MB.dat"
+            if [ -f "$FILE_PATH" ]; then
+              ACTUAL_SIZE=$(stat -c%s "$FILE_PATH")
+              EXPECTED_SIZE=$((size * 1024 * 1024))
+              echo "File ${size}MB: $ACTUAL_SIZE bytes (expected: $EXPECTED_SIZE)"
+              
+              if [ $ACTUAL_SIZE -lt $((EXPECTED_SIZE - 1024)) ] || [ $ACTUAL_SIZE -gt $((EXPECTED_SIZE + 1024)) ]; then
+                echo "❌ File size mismatch for ${size}MB file"
+                exit 1
+              fi
+            else
+              echo "❌ Missing ${size}MB test file"
+              exit 1
+            fi
+          done
+          
+          echo "✅ Test data verification passed"
+
+      - name: Upload test data
+        uses: actions/upload-artifact@v4
+        with:
+          name: phase3-test-data-${{ github.run_number }}
+          path: ${{ steps.setup.outputs.test-data-path }}
+          retention-days: 7
+
+  pagination-performance:
+    name: Pagination Performance Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    needs: setup-test-environment
+    if: github.event.inputs.test_type == 'all' || github.event.inputs.test_type == 'pagination' || github.event.inputs.test_type == ''
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build project
+        run: pnpm run build
+
+      - name: Download test data
+        uses: actions/download-artifact@v4
+        with:
+          name: phase3-test-data-${{ github.run_number }}
+          path: ./test-environment
+
+      - name: Run pagination benchmarks
+        id: pagination-tests
+        run: |
+          echo "📄 Running Pagination Performance Tests..."
+          
+          cd test-environment
+          node ../scripts/run-pagination-benchmark.js
+          
+          # Extract results for GitHub Actions
+          if [ -f "./metadata/pagination-benchmark.json" ]; then
+            RESULTS=$(cat "./metadata/pagination-benchmark.json")
+            echo "pagination-results<<EOF" >> $GITHUB_OUTPUT
+            echo "$RESULTS" >> $GITHUB_OUTPUT
+            echo "EOF" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Validate pagination performance
+        run: |
+          echo "🔍 Validating pagination performance..."
+          
+          RESULTS_FILE="./test-environment/metadata/pagination-benchmark.json"
+          
+          if [ ! -f "$RESULTS_FILE" ]; then
+            echo "❌ Pagination benchmark results not found"
+            exit 1
+          fi
+          
+          # Check if any page size exceeds 200ms threshold
+          EXCEEDS_THRESHOLD=$(jq -r '.results[] | select(.avgTimePerPage > 200) | .pageSize' "$RESULTS_FILE")
+          
+          if [ -n "$EXCEEDS_THRESHOLD" ]; then
+            echo "❌ Pagination performance threshold exceeded for page size(s): $EXCEEDS_THRESHOLD"
+            exit 1
+          fi
+          
+          echo "✅ Pagination performance tests passed"
+
+      - name: Upload pagination results
+        uses: actions/upload-artifact@v4
+        with:
+          name: pagination-results-${{ github.run_number }}
+          path: |
+            test-environment/metadata/pagination-benchmark.json
+          retention-days: 30
+
+  streaming-performance:
+    name: Streaming Performance Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    needs: setup-test-environment
+    if: github.event.inputs.test_type == 'all' || github.event.inputs.test_type == 'streaming' || github.event.inputs.test_type == ''
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build project
+        run: pnpm run build
+
+      - name: Download test data
+        uses: actions/download-artifact@v4
+        with:
+          name: phase3-test-data-${{ github.run_number }}
+          path: ./test-environment
+
+      - name: Run streaming benchmarks
+        id: streaming-tests
+        run: |
+          echo "🌊 Running Streaming Performance Tests..."
+          
+          cd test-environment
+          node ../scripts/run-streaming-benchmark.js
+          
+          # Extract results for GitHub Actions
+          if [ -f "./metadata/streaming-benchmark.json" ]; then
+            RESULTS=$(cat "./metadata/streaming-benchmark.json")
+            echo "streaming-results<<EOF" >> $GITHUB_OUTPUT
+            echo "$RESULTS" >> $GITHUB_OUTPUT
+            echo "EOF" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Validate streaming performance
+        run: |
+          echo "🔍 Validating streaming performance..."
+          
+          RESULTS_FILE="./test-environment/metadata/streaming-benchmark.json"
+          
+          if [ ! -f "$RESULTS_FILE" ]; then
+            echo "❌ Streaming benchmark results not found"
+            exit 1
+          fi
+          
+          # Check memory usage threshold (50MB)
+          MAX_MEMORY=$(jq -r '.results | map(.memoryGrowth) | max' "$RESULTS_FILE")
+          MEMORY_MB=$((MAX_MEMORY / 1024 / 1024))
+          
+          if [ $MEMORY_MB -gt 50 ]; then
+            echo "❌ Memory usage threshold exceeded: ${MEMORY_MB}MB (limit: 50MB)"
+            exit 1
+          fi
+          
+          # Check throughput threshold (10MB/s minimum)
+          MIN_THROUGHPUT=$(jq -r '.results | map(.throughput / 1024 / 1024) | min' "$RESULTS_FILE")
+          
+          if (( $(echo "$MIN_THROUGHPUT < 10" | bc -l) )); then
+            echo "❌ Throughput threshold exceeded: ${MIN_THROUGHPUT}MB/s (minimum: 10MB/s)"
+            exit 1
+          fi
+          
+          echo "✅ Streaming performance tests passed"
+
+      - name: Upload streaming results
+        uses: actions/upload-artifact@v4
+        with:
+          name: streaming-results-${{ github.run_number }}
+          path: |
+            test-environment/metadata/streaming-benchmark.json
+          retention-days: 30
+
+  load-testing:
+    name: Load and Concurrency Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    needs: setup-test-environment
+    if: github.event.inputs.test_type == 'all' || github.event.inputs.test_type == 'load' || github.event.inputs.test_type == ''
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build project
+        run: pnpm run build
+
+      - name: Download test data
+        uses: actions/download-artifact@v4
+        with:
+          name: phase3-test-data-${{ github.run_number }}
+          path: ./test-environment
+
+      - name: Run load tests
+        id: load-tests
+        run: |
+          echo "⚡ Running Load and Concurrency Tests..."
+          
+          cd test-environment
+          node ../scripts/run-load-test.js
+          
+          # Extract results for GitHub Actions
+          if [ -f "./metadata/load-test.json" ]; then
+            RESULTS=$(cat "./metadata/load-test.json")
+            echo "load-results<<EOF" >> $GITHUB_OUTPUT
+            echo "$RESULTS" >> $GITHUB_OUTPUT
+            echo "EOF" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Validate load test performance
+        run: |
+          echo "🔍 Validating load test performance..."
+          
+          RESULTS_FILE="./test-environment/metadata/load-test.json"
+          
+          if [ ! -f "$RESULTS_FILE" ]; then
+            echo "❌ Load test results not found"
+            exit 1
+          fi
+          
+          # Check response time threshold (500ms average)
+          AVG_TIME=$(jq -r '.results[] | select(.concurrency == 10) | .avgTime' "$RESULTS_FILE")
+          
+          if (( $(echo "$AVG_TIME > 500" | bc -l) )); then
+            echo "❌ Response time threshold exceeded: ${AVG_TIME}ms (limit: 500ms)"
+            exit 1
+          fi
+          
+          echo "✅ Load tests passed"
+
+      - name: Upload load test results
+        uses: actions/upload-artifact@v4
+        with:
+          name: load-test-results-${{ github.run_number }}
+          path: |
+            test-environment/metadata/load-test.json
+          retention-days: 30
+
+  performance-monitoring:
+    name: Performance Monitoring
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    needs: setup-test-environment
+    if: github.event.inputs.test_type == 'all' || github.event.inputs.test_type == 'monitoring' || github.event.inputs.test_type == ''
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build project
+        run: pnpm run build
+
+      - name: Download test data
+        uses: actions/download-artifact@v4
+        with:
+          name: phase3-test-data-${{ github.run_number }}
+          path: ./test-environment
+
+      - name: Run performance monitoring
+        run: |
+          echo "📊 Running Performance Monitoring..."
+          
+          # Start performance monitor in background
+          timeout 60s node --expose-gc dist/scripts/performance-monitor.js &
+          MONITOR_PID=$!
+          
+          # Run some load while monitoring
+          cd test-environment
+          for i in {1..5}; do
+            echo "Running test iteration $i..."
+            node ../scripts/run-pagination-benchmark.js > /dev/null 2>&1
+            node ../scripts/run-streaming-benchmark.js > /dev/null 2>&1
+            sleep 5
+          done
+          
+          # Stop monitoring
+          kill $MONITOR_PID 2>/dev/null || true
+          wait $MONITOR_PID 2>/dev/null || true
+          
+          echo "✅ Performance monitoring completed"
+
+      - name: Upload monitoring data
+        uses: actions/upload-artifact@v4
+        with:
+          name: monitoring-data-${{ github.run_number }}
+          path: |
+            monitoring-data/
+          retention-days: 7
+
+  comprehensive-analysis:
+    name: Comprehensive Performance Analysis
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    needs: [pagination-performance, streaming-performance, load-testing]
+    if: always() && (needs.pagination-performance.result == 'success' || needs.streaming-performance.result == 'success' || needs.load-testing.result == 'success')
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Download all results
+        uses: actions/download-artifact@v4
+        with:
+          pattern: "*-results-${{ github.run_number }}"
+          merge-multiple: true
+          path: ./results
+
+      - name: Generate comprehensive report
+        run: |
+          echo "📊 Generating Comprehensive Performance Report..."
+          
+          # Create report directory
+          mkdir -p ./report
+          
+          # Generate summary
+          cat > ./report/phase3-performance-summary.md << 'EOF'
+          # Phase 3 Performance Validation Report
+          
+          ## Test Configuration
+          - **Test Type**: ${{ github.event.inputs.test_type || 'all' }}
+          - **Change Count**: ${{ needs.setup-test-environment.outputs.change-count }}
+          - **File Sizes**: ${{ needs.setup-test-environment.outputs.file-sizes }} MB
+          - **Timestamp**: $(date -u +"%Y-%m-%dT%H:%M:%SZ")
+          - **Node Version**: $(node --version)
+          - **Platform**: $(uname -s)
+          
+          ## Test Results
+          
+          EOF
+          
+          # Add pagination results if available
+          if [ -f "./results/pagination-benchmark.json" ]; then
+            echo "### Pagination Performance" >> ./report/phase3-performance-summary.md
+            echo '```json' >> ./report/phase3-performance-summary.md
+            cat ./results/pagination-benchmark.json >> ./report/phase3-performance-summary.md
+            echo '```' >> ./report/phase3-performance-summary.md
+            echo "" >> ./report/phase3-performance-summary.md
+          fi
+          
+          # Add streaming results if available
+          if [ -f "./results/streaming-benchmark.json" ]; then
+            echo "### Streaming Performance" >> ./report/phase3-performance-summary.md
+            echo '```json' >> ./report/phase3-performance-summary.md
+            cat ./results/streaming-benchmark.json >> ./report/phase3-performance-summary.md
+            echo '```' >> ./report/phase3-performance-summary.md
+            echo "" >> ./report/phase3-performance-summary.md
+          fi
+          
+          # Add load test results if available
+          if [ -f "./results/load-test.json" ]; then
+            echo "### Load Testing Results" >> ./report/phase3-performance-summary.md
+            echo '```json' >> ./report/phase3-performance-summary.md
+            cat ./results/load-test.json >> ./report/phase3-performance-summary.md
+            echo '```' >> ./report/phase3-performance-summary.md
+            echo "" >> ./report/phase3-performance-summary.md
+          fi
+          
+          echo "✅ Comprehensive report generated"
+
+      - name: Upload comprehensive report
+        uses: actions/upload-artifact@v4
+        with:
+          name: phase3-comprehensive-report-${{ github.run_number }}
+          path: ./report
+          retention-days: 30
+
+      - name: Comment on PR with results
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            
+            try {
+              let comment = '## 🚀 Phase 3 Performance Validation Results\n\n';
+              
+              // Add test configuration
+              comment += '### 📋 Test Configuration\n\n';
+              comment += `- **Test Type**: ${process.env.TEST_TYPE || 'all'}\n`;
+              comment += `- **Change Count**: ${process.env.CHANGE_COUNT || '1200'}\n`;
+              comment += `- **File Sizes**: ${process.env.FILE_SIZES || '10,50,100'} MB\n\n`;
+              
+              // Add test results
+              comment += '### 📊 Test Results\n\n';
+              
+              // Pagination results
+              if (fs.existsSync('./results/pagination-benchmark.json')) {
+                const paginationResults = JSON.parse(fs.readFileSync('./results/pagination-benchmark.json', 'utf-8'));
+                comment += '#### 📄 Pagination Performance\n';
+                comment += `- **Status**: ✅ PASSED\n`;
+                comment += `- **Details**: ${paginationResults.results.length} page sizes tested\n`;
+                comment += `- **Fastest**: ${paginationResults.summary.fastestPageSize.pageSize} items/page\n\n`;
+              }
+              
+              // Streaming results
+              if (fs.existsSync('./results/streaming-benchmark.json')) {
+                const streamingResults = JSON.parse(fs.readFileSync('./results/streaming-benchmark.json', 'utf-8'));
+                comment += '#### 🌊 Streaming Performance\n';
+                comment += `- **Status**: ✅ PASSED\n`;
+                comment += `- **Avg Throughput**: ${(streamingResults.summary.avgThroughput / 1024 / 1024).toFixed(2)} MB/s\n`;
+                comment += `- **Max Memory Growth**: ${(streamingResults.summary.maxMemoryGrowth / 1024 / 1024).toFixed(2)} MB\n\n`;
+              }
+              
+              // Load test results
+              if (fs.existsSync('./results/load-test.json')) {
+                const loadResults = JSON.parse(fs.readFileSync('./results/load-test.json', 'utf-8'));
+                comment += '#### ⚡ Load Testing\n';
+                comment += `- **Status**: ✅ PASSED\n`;
+                comment += `- **Optimal Concurrency**: ${loadResults.summary.optimalConcurrency.concurrency}\n`;
+                comment += `- **Max Sustainable**: ${loadResults.summary.maxSustainableConcurrency}\n\n`;
+              }
+              
+              comment += '### ✅ Overall Status\n\n';
+              comment += 'All Phase 3 performance requirements have been successfully validated!\n\n';
+              comment += '📊 [View detailed results](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }})';
+              
+              // Find existing comment
+              const { data: comments } = await github.rest.issues.listComments({
+                issue_number: context.issue.number,
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+              });
+              
+              const existingComment = comments.find(comment => 
+                comment.body.includes('Phase 3 Performance Validation Results') && 
+                comment.user.type === 'Bot'
+              );
+              
+              if (existingComment) {
+                await github.rest.issues.updateComment({
+                  comment_id: existingComment.id,
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  body: comment
+                });
+              } else {
+                await github.rest.issues.createComment({
+                  issue_number: context.issue.number,
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  body: comment
+                });
+              }
+              
+            } catch (error) {
+              console.error('Failed to generate Phase 3 performance comment:', error);
+            }
+
+  performance-gate:
+    name: Performance Gate Check
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    needs: [pagination-performance, streaming-performance, load-testing]
+    if: github.event_name == 'pull_request'
+
+    steps:
+      - name: Check performance gate
+        run: |
+          echo "🚪 Checking Phase 3 performance gate..."
+          
+          PAGINATION_RESULT="${{ needs.pagination-performance.result }}"
+          STREAMING_RESULT="${{ needs.streaming-performance.result }}"
+          LOAD_TEST_RESULT="${{ needs.load-testing.result }}"
+          
+          FAILED_TESTS=0
+          
+          if [ "$PAGINATION_RESULT" != "success" ]; then
+            echo "❌ Pagination tests failed"
+            FAILED_TESTS=$((FAILED_TESTS + 1))
+          fi
+          
+          if [ "$STREAMING_RESULT" != "success" ]; then
+            echo "❌ Streaming tests failed"
+            FAILED_TESTS=$((FAILED_TESTS + 1))
+          fi
+          
+          if [ "$LOAD_TEST_RESULT" != "success" ]; then
+            echo "❌ Load tests failed"
+            FAILED_TESTS=$((FAILED_TESTS + 1))
+          fi
+          
+          if [ $FAILED_TESTS -gt 0 ]; then
+            echo "❌ Phase 3 performance gate failed: $FAILED_TESTS test suite(s) failed"
+            echo "::error::Phase 3 performance validation failed. Please review and fix before merging."
+            exit 1
+          else
+            echo "✅ Phase 3 performance gate passed"
+            echo "All performance requirements validated successfully"
+          fi

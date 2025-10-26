@@ -140,6 +140,12 @@ export class CorsMiddleware {
   getFastifyConfig() {
     return {
       origin: (origin: string, callback: Function) => {
+        // Allow health check requests without origin (for monitoring tools)
+        if (!origin) {
+          callback(null, true);
+          return;
+        }
+        
         if (this.isOriginAllowed(origin)) {
           callback(null, true);
         } else {

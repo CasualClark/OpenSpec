@@ -51,6 +51,16 @@ export const EnvSchema = z.object({
   
   // Logging configuration
   LOG_LEVEL: z.enum(['debug', 'info', 'warn', 'error']).default('info'),
+  ENABLE_STRUCTURED_LOGGING: z.coerce.boolean().default(true),
+  ENABLE_JSON_OUTPUT: z.coerce.boolean().default(true),
+  ENABLE_PRETTY_OUTPUT: z.coerce.boolean().default(false),
+  LOG_FILE: z.string().optional(),
+  LOG_MAX_FILE_SIZE: z.coerce.number().default(10 * 1024 * 1024), // 10MB
+  LOG_MAX_FILES: z.coerce.number().default(5),
+  LOG_BUFFER_SIZE: z.coerce.number().default(100),
+  LOG_FLUSH_INTERVAL_MS: z.coerce.number().default(5000),
+  LOG_INCLUDE_STACK_TRACE: z.coerce.boolean().default(true),
+  LOG_SANITIZE_ERRORS: z.coerce.boolean().default(true),
   
   // Enhanced security configuration
   SECURITY_HEADERS_ENABLED: z.coerce.boolean().default(true),
@@ -113,6 +123,8 @@ export interface SSEHeartbeatEvent {
 export interface NDJSONEvent {
   type: 'start' | 'result' | 'error' | 'end';
   ts?: number;
+  tool?: string;
+  apiVersion?: string;
   result?: ToolResult;
   error?: {
     code: string;
@@ -147,6 +159,17 @@ export interface ServerConfig {
   };
   logging: {
     level: 'debug' | 'info' | 'warn' | 'error' | 'silent';
+    enableStructuredLogging?: boolean;
+    enableJsonOutput?: boolean;
+    enablePrettyOutput?: boolean;
+    logFile?: string;
+    maxFileSize?: number;
+    maxFiles?: number;
+    bufferSize?: number;
+    flushIntervalMs?: number;
+    includeStackTrace?: boolean;
+    sanitizeErrors?: boolean;
+    redactFields?: string[];
   };
   workingDirectory: string;
 }

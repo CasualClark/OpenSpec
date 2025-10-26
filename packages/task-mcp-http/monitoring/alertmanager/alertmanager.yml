@@ -1,0 +1,169 @@
+global:
+  smtp_smarthost: 'localhost:587'
+  smtp_from: 'alerts@company.com'
+  slack_api_url: 'https://hooks.slack.com/services/YOUR/SLACK/WEBHOOK'
+
+route:
+  group_by: ['alertname', 'cluster', 'service']
+  group_wait: 10s
+  group_interval: 10s
+  repeat_interval: 12h
+  receiver: 'default'
+  routes:
+    # Critical alerts - immediate paging
+    - match:
+        severity: critical
+      receiver: 'critical-alerts'
+      group_wait: 0s
+      repeat_interval: 5m
+      continue: true
+
+    # High priority alerts - email and Slack
+    - match:
+        severity: warning
+      receiver: 'warning-alerts'
+      group_wait: 30s
+      repeat_interval: 2h
+      continue: true
+
+    # Infrastructure alerts - dedicated team
+    - match:
+        category: infrastructure
+      receiver: 'infrastructure-alerts'
+      group_by: ['alertname', 'instance']
+      continue: true
+
+    # Security alerts - security team
+    - match:
+        category: security
+      receiver: 'security-alerts'
+      group_by: ['alertname', 'category']
+      continue: true
+
+    # Business alerts - product team
+    - match:
+        category: business
+      receiver: 'business-alerts'
+      continue: true
+
+    # SLO violations - SRE team
+    - match:
+        slo: availability
+      receiver: 'slo-alerts'
+      continue: true
+
+    # Info alerts - Slack only
+    - match:
+        severity: info
+      receiver: 'info-alerts'
+      group_wait: 1m
+      repeat_interval: 24h
+
+inhibit_rules:
+  # Inhibit warning alerts if critical alert is firing for same instance
+  - source_match:
+      severity: 'critical'
+    target_match:
+      severity: 'warning'
+    equal: ['alertname', 'instance']
+
+  # Inhibit info alerts if warning alert is firing
+  - source_match:
+      severity: 'warning'
+    target_match:
+      severity: 'info'
+    equal: ['alertname']
+
+receivers:
+  - name: 'default'
+    slack_configs:
+      - channel: '#task-mcp-alerts'
+        title: 'Task MCP Alert'
+        text: '{{ template "slack.default.title" . }}'
+        send_resolved: true
+
+  - name: 'critical-alerts'
+    pagerduty_configs:
+      - service_key: 'YOUR_PAGERDUTY_SERVICE_KEY'
+        description: '{{ .CommonLabels.alertname }}: {{ .CommonAnnotations.summary }}'
+        details:
+          firing: '{{ .Alerts.Firing | len }}'
+          resolved: '{{ .Alerts.Resolved | len }}'
+          runbook: '{{ .CommonAnnotations.runbook_url }}'
+    slack_configs:
+      - channel: '#task-mcp-critical'
+        title: '🚨 CRITICAL: Task MCP Alert'
+        color: 'danger'
+        text: '{{ template "slack.critical" . }}'
+        send_resolved: true
+
+  - name: 'warning-alerts'
+    email_configs:
+      - to: 'task-mcp-team@company.com'
+        subject: '⚠️ Task MCP Warning: {{ .GroupLabels.alertname }}'
+        body: '{{ template "email.warning" . }}'
+    slack_configs:
+      - channel: '#task-mcp-alerts'
+        title: '⚠️ Task MCP Warning'
+        color: 'warning'
+        text: '{{ template "slack.warning" . }}'
+        send_resolved: true
+
+  - name: 'infrastructure-alerts'
+    email_configs:
+      - to: 'infrastructure-team@company.com'
+        subject: '🔧 Task MCP Infrastructure: {{ .GroupLabels.alertname }}'
+        body: '{{ template "email.infrastructure" . }}'
+    slack_configs:
+      - channel: '#infrastructure-alerts'
+        title: '🔧 Task MCP Infrastructure Alert'
+        color: 'warning'
+        text: '{{ template "slack.infrastructure" . }}'
+        send_resolved: true
+
+  - name: 'security-alerts'
+    email_configs:
+      - to: 'security-team@company.com'
+        subject: '🔒 Task MCP Security: {{ .GroupLabels.alertname }}'
+        body: '{{ template "email.security" . }}'
+    slack_configs:
+      - channel: '#security-alerts'
+        title: '🔒 Task MCP Security Alert'
+        color: 'danger'
+        text: '{{ template "slack.security" . }}'
+        send_resolved: true
+
+  - name: 'business-alerts'
+    email_configs:
+      - to: 'product-team@company.com'
+        subject: '📊 Task MCP Business: {{ .GroupLabels.alertname }}'
+        body: '{{ template "email.business" . }}'
+    slack_configs:
+      - channel: '#product-alerts'
+        title: '📊 Task MCP Business Alert'
+        color: 'warning'
+        text: '{{ template "slack.business" . }}'
+        send_resolved: true
+
+  - name: 'slo-alerts'
+    email_configs:
+      - to: 'sre-team@company.com'
+        subject: '📈 Task MCP SLO: {{ .GroupLabels.alertname }}'
+        body: '{{ template "email.slo" . }}'
+    slack_configs:
+      - channel: '#sre-alerts'
+        title: '📈 Task MCP SLO Alert'
+        color: 'warning'
+        text: '{{ template "slack.slo" . }}'
+        send_resolved: true
+
+  - name: 'info-alerts'
+    slack_configs:
+      - channel: '#task-mcp-info'
+        title: 'ℹ️ Task MCP Info'
+        color: 'good'
+        text: '{{ template "slack.info" . }}'
+        send_resolved: true
+
+templates:
+  - '/etc/alertmanager/templates/*.tmpl'

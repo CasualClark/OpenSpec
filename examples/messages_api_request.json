@@ -1,0 +1,83 @@
+{
+  "model": "claude-3-5-sonnet-20241022",
+  "max_tokens": 512,
+  "messages": [
+    {
+      "role": "user",
+      "content": "Create a new change called 'user-auth-v2' for implementing user authentication using the feature template"
+    }
+  ],
+  "tools": [
+    {
+      "name": "change.open",
+      "description": "Create a new change in OpenSpec with proposal and tasks",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string",
+            "description": "Change title (imperative form)"
+          },
+          "slug": {
+            "type": "string",
+            "description": "Change slug (kebab-case, 3-64 chars)",
+            "pattern": "^[a-z0-9](?:[a-z0-9\\-]{1,62})[a-z0-9]$"
+          },
+          "template": {
+            "type": "string",
+            "description": "Change template type",
+            "enum": ["feature", "bugfix", "chore"]
+          },
+          "rationale": {
+            "type": "string",
+            "description": "Why this change is needed"
+          },
+          "owner": {
+            "type": "string",
+            "description": "Change owner (optional)"
+          },
+          "ttl": {
+            "type": "integer",
+            "description": "Time to live for lock in seconds (optional)",
+            "minimum": 60,
+            "maximum": 86400
+          }
+        },
+        "required": ["title", "slug", "template"]
+      }
+    },
+    {
+      "name": "changes.active",
+      "description": "List all active changes",
+      "input_schema": {
+        "type": "object",
+        "properties": {}
+      }
+    },
+    {
+      "name": "change.archive",
+      "description": "Archive a completed change",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "slug": {
+            "type": "string",
+            "description": "Change slug to archive"
+          }
+        },
+        "required": ["slug"]
+      }
+    }
+  ],
+  "mcp_servers": [
+    {
+      "type": "url",
+      "url": "https://localhost:8443/sse",
+      "name": "task-mcp",
+      "authorization_token": "devtoken"
+    }
+  ],
+  "tool_choice": {
+    "type": "auto"
+  }
+}

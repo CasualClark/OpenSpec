@@ -121,3 +121,216 @@ Implementation details for change ${i}.
     );
   }
 }
+
+/**
+ * IDE Response Validator for testing IDE-specific response formats
+ */
+export class IDEResponseValidator {
+  /**
+   * Validate pagination response format for IDE consumption
+   */
+  validatePaginationResponse(response: any): boolean {
+    try {
+      // Check required fields
+      if (!response || typeof response !== 'object') {
+        return false;
+      }
+
+      const requiredFields = ['changes', 'total', 'generated', 'processingTime'];
+      for (const field of requiredFields) {
+        if (!(field in response)) {
+          return false;
+        }
+      }
+
+      // Validate changes array
+      if (!Array.isArray(response.changes)) {
+        return false;
+      }
+
+      // Validate each change entry
+      for (const change of response.changes) {
+        if (!this.validateChangeEntry(change)) {
+          return false;
+        }
+      }
+
+      // Validate total count
+      if (typeof response.total !== 'number' || response.total < 0) {
+        return false;
+      }
+
+      // Validate timestamp
+      if (typeof response.generated !== 'string' || !Date.parse(response.generated)) {
+        return false;
+      }
+
+      // Validate processing time
+      if (typeof response.processingTime !== 'number' || response.processingTime < 0) {
+        return false;
+      }
+
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  /**
+   * Validate individual change entry
+   */
+  private validateChangeEntry(change: any): boolean {
+    if (!change || typeof change !== 'object') {
+      return false;
+    }
+
+    const requiredFields = ['slug', 'title', 'status', 'modified'];
+    for (const field of requiredFields) {
+      if (!(field in change)) {
+        return false;
+      }
+    }
+
+    // Validate slug
+    if (typeof change.slug !== 'string' || change.slug.length === 0) {
+      return false;
+    }
+
+    // Validate title
+    if (typeof change.title !== 'string') {
+      return false;
+    }
+
+    // Validate status
+    const validStatuses = ['draft', 'planned', 'in-progress', 'complete', 'error', 'unknown', 'locked'];
+    if (!validStatuses.includes(change.status)) {
+      return false;
+    }
+
+    // Validate modified timestamp
+    if (typeof change.modified !== 'string' || !Date.parse(change.modified)) {
+      return false;
+    }
+
+    return true;
+  }
+
+  /**
+   * Validate streaming response format for IDE consumption
+   */
+  validateStreamingResponse(response: any): boolean {
+    try {
+      if (!response || typeof response !== 'object') {
+        return false;
+      }
+
+      // Check streaming-specific fields
+      if (response.validation && typeof response.validation === 'object') {
+        const validation = response.validation;
+        if (typeof validation.isValid !== 'boolean') {
+          return false;
+        }
+      }
+
+      if (response.content !== undefined && typeof response.content !== 'string') {
+        return false;
+      }
+
+      if (response.metadata && typeof response.metadata !== 'object') {
+        return false;
+      }
+
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  /**
+   * Validate error response format for IDE consumption
+   */
+  validateErrorResponse(response: any): boolean {
+    try {
+      if (!response || typeof response !== 'object') {
+        return false;
+      }
+
+      // Check error-specific fields
+      const requiredFields = ['success', 'error'];
+      for (const field of requiredFields) {
+        if (!(field in response)) {
+          return false;
+        }
+      }
+
+      // Validate success flag
+      if (typeof response.success !== 'boolean' || response.success !== false) {
+        return false;
+      }
+
+      // Validate error message
+      if (typeof response.error !== 'string' || response.error.length === 0) {
+        return false;
+      }
+
+      // Optional error code
+      if (response.errorCode !== undefined && typeof response.errorCode !== 'string') {
+        return false;
+      }
+
+      // Optional recovery suggestions
+      if (response.recoverySuggestions !== undefined && !Array.isArray(response.recoverySuggestions)) {
+        return false;
+      }
+
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  /**
+   * Validate progress update format for IDE UI
+   */
+  validateProgressUpdate(progress: any): boolean {
+    try {
+      if (!progress || typeof progress !== 'object') {
+        return false;
+      }
+
+      // Required fields
+      const requiredFields = ['percentage', 'timestamp'];
+      for (const field of requiredFields) {
+        if (!(field in progress)) {
+          return false;
+        }
+      }
+
+      // Validate percentage
+      if (typeof progress.percentage !== 'number' || 
+          progress.percentage < 0 || 
+          progress.percentage > 100) {
+        return false;
+      }
+
+      // Validate timestamp
+      if (typeof progress.timestamp !== 'number' || progress.timestamp <= 0) {
+        return false;
+      }
+
+      // Optional stage
+      if (progress.stage !== undefined && typeof progress.stage !== 'string') {
+        return false;
+      }
+
+      // Optional bytes read
+      if (progress.bytesRead !== undefined && typeof progress.bytesRead !== 'number') {
+        return false;
+      }
+
+      return true;
+    } catch {
+      return false;
+    }
+  }
+}

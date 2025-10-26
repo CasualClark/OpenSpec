@@ -90,7 +90,7 @@
             },
         },
     },
-    "theme": "oat-latte",
+    "theme": "sunset-slate",
     "autoupdate": true,
     "share": "manual",
     "permission": {
@@ -116,7 +116,7 @@
         "web-search-prime": {
             "type": "remote",
             "url": "https://api.z.ai/api/mcp/web_search_prime/mcp",
-            "enabled": true,
+            "enabled": false,
             "headers": {
                 "Authorization": "Bearer {env:ZAI_API_KEY}",
             },
@@ -129,7 +129,7 @@
         "zai-mcp-server": {
             "type": "local",
             "command": ["npx", "-y", "@z_ai/mcp-server"],
-            "enabled": true,
+            "enabled": false,
             "environment": {
                 "Z_AI_API_KEY": "{env:ZAI_API_KEY}",
                 "Z_AI_MODE": "ZAI",
@@ -165,7 +165,7 @@
         "AGENTS.md",
         ".opencode/prompts/*.md",
         ".opencode/command/*.md",
-        ".opencode/agent/*.md"
+        ".opencode/agent/*.md",
     ],
     "command": {
         "analyze-performance": {

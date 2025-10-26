@@ -1,0 +1,626 @@
+{
+	"info": {
+		"_postman_id": "task-mcp-http-collection",
+		"name": "Task MCP HTTP Server",
+		"description": "Postman collection for Task MCP HTTP Server API testing with SSE and NDJSON transports",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+	},
+	"item": [
+		{
+			"name": "Health Checks",
+			"item": [
+				{
+					"name": "Health Check",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Status code is 200\", function () {",
+									"    pm.response.to.have.status(200);",
+									"});",
+									"",
+									"pm.test(\"Response has status field\", function () {",
+									"    const jsonData = pm.response.json();",
+									"    pm.expect(jsonData).to.have.property('status');",
+									"    pm.expect(jsonData.status).to.eql('healthy');",
+									"});",
+									"",
+									"pm.test(\"Response has timestamp\", function () {",
+									"    const jsonData = pm.response.json();",
+									"    pm.expect(jsonData).to.have.property('timestamp');",
+									"});",
+									"",
+									"pm.test(\"Response has uptime\", function () {",
+									"    const jsonData = pm.response.json();",
+									"    pm.expect(jsonData).to.have.property('uptime');",
+									"    pm.expect(jsonData.uptime).to.be.a('number');",
+									"});"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/healthz",
+							"host": ["{{baseUrl}}"],
+							"path": ["healthz"]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Readiness Check",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Status code is 200\", function () {",
+									"    pm.response.to.have.status(200);",
+									"});",
+									"",
+									"pm.test(\"Response has ready field\", function () {",
+									"    const jsonData = pm.response.json();",
+									"    pm.expect(jsonData).to.have.property('ready');",
+									"    pm.expect(jsonData.ready).to.be.a('boolean');",
+									"});",
+									"",
+									"pm.test(\"Response has dependencies\", function () {",
+									"    const jsonData = pm.response.json();",
+									"    pm.expect(jsonData).to.have.property('dependencies');",
+									"    pm.expect(jsonData.dependencies).to.be.a('object');",
+									"});"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/readyz",
+							"host": ["{{baseUrl}}"],
+							"path": ["readyz"]
+						}
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "SSE Endpoints",
+			"item": [
+				{
+					"name": "Get Active Changes (SSE)",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Status code is 200\", function () {",
+									"    pm.response.to.have.status(200);",
+									"});",
+									"",
+									"pm.test(\"Content-Type is text/event-stream\", function () {",
+									"    pm.expect(pm.response.headers.get('Content-Type')).to.include('text/event-stream');",
+									"});",
+									"",
+									"pm.test(\"Response contains SSE events\", function () {",
+									"    const responseText = pm.response.text();",
+									"    pm.expect(responseText).to.include('event:');",
+									"    pm.expect(responseText).to.include('data:');",
+									"});"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Authorization",
+								"value": "Bearer {{authToken}}"
+							},
+							{
+								"key": "Accept",
+								"value": "text/event-stream"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"tool\": \"changes.active\",\n    \"input\": {\n        \"limit\": 10,\n        \"offset\": 0\n    },\n    \"apiVersion\": \"1.0.0\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/sse",
+							"host": ["{{baseUrl}}"],
+							"path": ["sse"]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Create Change (SSE)",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Status code is 200\", function () {",
+									"    pm.response.to.have.status(200);",
+									"});",
+									"",
+									"pm.test(\"Response contains result event\", function () {",
+									"    const responseText = pm.response.text();",
+									"    pm.expect(responseText).to.include('event: result');",
+									"});",
+									"",
+									"pm.test(\"Response contains tool result\", function () {",
+									"    const responseText = pm.response.text();",
+									"    pm.expect(responseText).to.include('change.open');",
+									"});"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Authorization",
+								"value": "Bearer {{authToken}}"
+							},
+							{
+								"key": "Accept",
+								"value": "text/event-stream"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"tool\": \"change.open\",\n    \"input\": {\n        \"title\": \"Example Change from Postman\",\n        \"slug\": \"example-postman-change\",\n        \"template\": \"feature\",\n        \"rationale\": \"Created via Postman collection\",\n        \"owner\": \"postman-user\"\n    },\n    \"apiVersion\": \"1.0.0\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/sse",
+							"host": ["{{baseUrl}}"],
+							"path": ["sse"]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Archive Change (SSE)",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Status code is 200\", function () {",
+									"    pm.response.to.have.status(200);",
+									"});",
+									"",
+									"pm.test(\"Response contains result event\", function () {",
+									"    const responseText = pm.response.text();",
+									"    pm.expect(responseText).to.include('event: result');",
+									"});"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Authorization",
+								"value": "Bearer {{authToken}}"
+							},
+							{
+								"key": "Accept",
+								"value": "text/event-stream"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"tool\": \"change.archive\",\n    \"input\": {\n        \"slug\": \"example-postman-change\"\n    },\n    \"apiVersion\": \"1.0.0\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/sse",
+							"host": ["{{baseUrl}}"],
+							"path": ["sse"]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Error Handling - Invalid Tool (SSE)",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Status code is 200\", function () {",
+									"    pm.response.to.have.status(200);",
+									"});",
+									"",
+									"pm.test(\"Response contains error event\", function () {",
+									"    const responseText = pm.response.text();",
+									"    pm.expect(responseText).to.include('event: error');",
+									"});",
+									"",
+									"pm.test(\"Error contains tool not found\", function () {",
+									"    const responseText = pm.response.text();",
+									"    pm.expect(responseText).to.include('TOOL_NOT_FOUND');",
+									"});"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Authorization",
+								"value": "Bearer {{authToken}}"
+							},
+							{
+								"key": "Accept",
+								"value": "text/event-stream"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"tool\": \"nonexistent.tool\",\n    \"input\": {},\n    \"apiVersion\": \"1.0.0\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/sse",
+							"host": ["{{baseUrl}}"],
+							"path": ["sse"]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Error Handling - Invalid Input (SSE)",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Status code is 200\", function () {",
+									"    pm.response.to.have.status(200);",
+									"});",
+									"",
+									"pm.test(\"Response contains error event\", function () {",
+									"    const responseText = pm.response.text();",
+									"    pm.expect(responseText).to.include('event: error');",
+									"});",
+									"",
+									"pm.test(\"Error contains validation error\", function () {",
+									"    const responseText = pm.response.text();",
+									"    pm.expect(responseText).to.include('INVALID_INPUT');",
+									"});"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Authorization",
+								"value": "Bearer {{authToken}}"
+							},
+							{
+								"key": "Accept",
+								"value": "text/event-stream"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"tool\": \"change.open\",\n    \"input\": {\n        \"title\": \"\",\n        \"slug\": \"invalid slug!\",\n        \"template\": \"invalid\"\n    },\n    \"apiVersion\": \"1.0.0\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/sse",
+							"host": ["{{baseUrl}}"],
+							"path": ["sse"]
+						}
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "NDJSON Endpoints",
+			"item": [
+				{
+					"name": "Get Active Changes (NDJSON)",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Status code is 200\", function () {",
+									"    pm.response.to.have.status(200);",
+									"});",
+									"",
+									"pm.test(\"Content-Type is application/x-ndjson\", function () {",
+									"    pm.expect(pm.response.headers.get('Content-Type')).to.include('application/x-ndjson');",
+									"});",
+									"",
+									"pm.test(\"Response contains NDJSON events\", function () {",
+									"    const responseText = pm.response.text();",
+									"    const lines = responseText.split('\\n').filter(line => line.trim());",
+									"    pm.expect(lines.length).to.be.greaterThan(0);",
+									"    ",
+									"    // Check for start event",
+									"    const hasStartEvent = lines.some(line => line.includes('\"type\":\"start\"'));",
+									"    pm.expect(hasStartEvent).to.be.true;",
+									"    ",
+									"    // Check for result event",
+									"    const hasResultEvent = lines.some(line => line.includes('\"type\":\"result\"'));",
+									"    pm.expect(hasResultEvent).to.be.true;",
+									"});"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Authorization",
+								"value": "Bearer {{authToken}}"
+							},
+							{
+								"key": "Accept",
+								"value": "application/x-ndjson"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"tool\": \"changes.active\",\n    \"input\": {\n        \"limit\": 10,\n        \"offset\": 0\n    },\n    \"apiVersion\": \"1.0.0\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/mcp",
+							"host": ["{{baseUrl}}"],
+							"path": ["mcp"]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Create Change (NDJSON)",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Status code is 200\", function () {",
+									"    pm.response.to.have.status(200);",
+									"});",
+									"",
+									"pm.test(\"Response contains NDJSON events\", function () {",
+									"    const responseText = pm.response.text();",
+									"    const lines = responseText.split('\\n').filter(line => line.trim());",
+									"    ",
+									"    // Check for start event",
+									"    const startEvent = lines.find(line => line.includes('\"type\":\"start\"'));",
+									"    pm.expect(startEvent).to.exist;",
+									"    ",
+									"    // Check for result event",
+									"    const resultEvent = lines.find(line => line.includes('\"type\":\"result\"'));",
+									"    pm.expect(resultEvent).to.exist;",
+									"    ",
+									"    // Check for end event",
+									"    const endEvent = lines.find(line => line.includes('\"type\":\"end\"'));",
+									"    pm.expect(endEvent).to.exist;",
+									"});"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Authorization",
+								"value": "Bearer {{authToken}}"
+							},
+							{
+								"key": "Accept",
+								"value": "application/x-ndjson"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"tool\": \"change.open\",\n    \"input\": {\n        \"title\": \"Example Change from Postman (NDJSON)\",\n        \"slug\": \"example-postman-ndjson\",\n        \"template\": \"feature\",\n        \"rationale\": \"Created via Postman collection using NDJSON\",\n        \"owner\": \"postman-user\"\n    },\n    \"apiVersion\": \"1.0.0\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/mcp",
+							"host": ["{{baseUrl}}"],
+							"path": ["mcp"]
+						}
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Security & Metrics",
+			"item": [
+				{
+					"name": "Get Security Metrics",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Status code is 200\", function () {",
+									"    pm.response.to.have.status(200);",
+									"});",
+									"",
+									"pm.test(\"Response has success field\", function () {",
+									"    const jsonData = pm.response.json();",
+									"    pm.expect(jsonData).to.have.property('success');",
+									"    pm.expect(jsonData.success).to.be.a('boolean');",
+									"});",
+									"",
+									"pm.test(\"Response has data field\", function () {",
+									"    const jsonData = pm.response.json();",
+									"    pm.expect(jsonData).to.have.property('data');",
+									"    pm.expect(jsonData.data).to.be.a('object');",
+									"});",
+									"",
+									"pm.test(\"Response has audit metrics\", function () {",
+									"    const jsonData = pm.response.json();",
+									"    pm.expect(jsonData.data).to.have.property('audit');",
+									"    pm.expect(jsonData.data.audit).to.be.a('object');",
+									"});"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{authToken}}"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/security/metrics",
+							"host": ["{{baseUrl}}"],
+							"path": ["security", "metrics"]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Authentication Error Test",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Status code is 401\", function () {",
+									"    pm.response.to.have.status(401);",
+									"});",
+									"",
+									"pm.test(\"Response contains authentication error\", function () {",
+									"    const jsonData = pm.response.json();",
+									"    pm.expect(jsonData).to.have.property('error');",
+									"    pm.expect(jsonData.error.code).to.eql('AUTHENTICATION_FAILED');",
+									"});"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer invalid-token"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/security/metrics",
+							"host": ["{{baseUrl}}"],
+							"path": ["security", "metrics"]
+						}
+					},
+					"response": []
+				}
+			]
+		}
+	],
+	"event": [
+		{
+			"listen": "prerequest",
+			"script": {
+				"type": "text/javascript",
+				"exec": [
+					"// Set global variables for the collection",
+					"if (!pm.globals.baseUrl) {",
+					"    pm.globals.set('baseUrl', 'http://localhost:8443');",
+					"}",
+					"",
+					"if (!pm.globals.authToken) {",
+					"    pm.globals.set('authToken', 'your-auth-token-here');",
+					"}",
+					"",
+					"// Log request details",
+					"console.log('Request:', {",
+					"    method: request.method,",
+					"    url: request.url,",
+					"    headers: request.headers,",
+					"    body: request.body",
+					"});"
+				]
+			}
+		},
+		{
+			"listen": "test",
+			"script": {
+				"type": "text/javascript",
+				"exec": [
+					"// Log response details",
+					"console.log('Response:', {",
+					"    status: response.code,",
+					"    statusText: response.statusText,",
+					"    headers: response.headers,",
+					"    responseTime: response.responseTime,",
+					"    responseSize: response.responseSize",
+					"});",
+					"",
+					"// Store response time for monitoring",
+					"if (pm.response.responseTime) {",
+					"    pm.globals.set('lastResponseTime', pm.response.responseTime);",
+					"}"
+				]
+			}
+		}
+	],
+	"variable": [
+		{
+			"key": "baseUrl",
+			"value": "http://localhost:8443",
+			"type": "string"
+		},
+		{
+			"key": "authToken",
+			"value": "your-auth-token-here",
+			"type": "string"
+		}
+	]
+}

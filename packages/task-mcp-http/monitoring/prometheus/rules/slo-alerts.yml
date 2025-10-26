@@ -1,0 +1,338 @@
+groups:
+  - name: task-mcp-slo-alerts
+    interval: 30s
+    rules:
+      # Availability SLO Alerts - Fast Burn (1 hour)
+      - alert: TaskMCPHighErrorRateFastBurn
+        expr: |
+          (
+            sum(rate(http_server_requests_total{status=~"5.."}[5m])) /
+            sum(rate(http_server_requests_total[5m]))
+          ) > 0.05
+        for: 5m
+        labels:
+          severity: critical
+          slo: availability
+          burn_rate: fast
+        annotations:
+          summary: "Task MCP HTTP server experiencing high error rate (fast burn)"
+          description: |
+            Error rate is {{ $value | humanizePercentage }} over the last 5 minutes.
+            This would consume the monthly error budget in less than 2 hours.
+            
+            Current error budget consumption: {{ $value | humanizePercentage }}
+            SLO target: < 1% error rate
+            
+            Runbook: https://docs.company.com/runbooks/task-mcp/high-error-rate
+          dashboard_url: "https://grafana.company.com/d/task-mcp-overview"
+
+      # Availability SLO Alerts - Medium Burn (6 hours)
+      - alert: TaskMCPHighErrorRateMediumBurn
+        expr: |
+          (
+            sum(rate(http_server_requests_total{status=~"5.."}[15m])) /
+            sum(rate(http_server_requests_total[15m]))
+          ) > 0.017
+        for: 15m
+        labels:
+          severity: warning
+          slo: availability
+          burn_rate: medium
+        annotations:
+          summary: "Task MCP HTTP server experiencing elevated error rate (medium burn)"
+          description: |
+            Error rate is {{ $value | humanizePercentage }} over the last 15 minutes.
+            This would consume the monthly error budget in less than 6 hours.
+            
+            Current error budget consumption: {{ $value | humanizePercentage }}
+            SLO target: < 1% error rate
+          dashboard_url: "https://grafana.company.com/d/task-mcp-overview"
+
+      # Availability SLO Alerts - Slow Burn (24 hours)
+      - alert: TaskMCPHighErrorRateSlowBurn
+        expr: |
+          (
+            sum(rate(http_server_requests_total{status=~"5.."}[1h])) /
+            sum(rate(http_server_requests_total[1h]))
+          ) > 0.004
+        for: 30m
+        labels:
+          severity: info
+          slo: availability
+          burn_rate: slow
+        annotations:
+          summary: "Task MCP HTTP server experiencing elevated error rate (slow burn)"
+          description: |
+            Error rate is {{ $value | humanizePercentage }} over the last hour.
+            This would consume the monthly error budget in less than 24 hours.
+            
+            Current error budget consumption: {{ $value | humanizePercentage }}
+            SLO target: < 1% error rate
+          dashboard_url: "https://grafana.company.com/d/task-mcp-overview"
+
+      # Latency SLO Alerts - HTTP Requests
+      - alert: TaskMCPLatencyDegradation
+        expr: |
+          histogram_quantile(0.95,
+            sum(rate(http_server_request_duration_seconds_bucket[5m])) by (le)
+          ) > 0.2
+        for: 10m
+        labels:
+          severity: warning
+          slo: latency
+        annotations:
+          summary: "Task MCP HTTP server latency degradation"
+          description: |
+            95th percentile latency is {{ $value }}s over the last 5 minutes.
+            SLO target: p95 < 200ms
+            
+            This indicates performance degradation that may impact user experience.
+          dashboard_url: "https://grafana.company.com/d/task-mcp-api"
+
+      - alert: TaskMCPCriticalLatency
+        expr: |
+          histogram_quantile(0.99,
+            sum(rate(http_server_request_duration_seconds_bucket[5m])) by (le)
+          ) > 0.5
+        for: 5m
+        labels:
+          severity: critical
+          slo: latency
+        annotations:
+          summary: "Task MCP HTTP server critical latency"
+          description: |
+            99th percentile latency is {{ $value }}s over the last 5 minutes.
+            SLO target: p99 < 500ms
+            
+            This indicates severe performance degradation requiring immediate attention.
+          dashboard_url: "https://grafana.company.com/d/task-mcp-api"
+
+      # Tool Execution Latency Alerts
+      - alert: TaskMCPToolLatencyDegradation
+        expr: |
+          histogram_quantile(0.95,
+            sum(rate(tool_execution_duration_seconds_bucket[5m])) by (le, tool_name)
+          ) > 0.5
+        for: 10m
+        labels:
+          severity: warning
+          slo: tool_latency
+        annotations:
+          summary: "Task MCP tool execution latency degradation"
+          description: |
+            Tool {{ $labels.tool_name }} 95th percentile latency is {{ $value }}s.
+            SLO target: p95 < 500ms
+            
+            This may indicate tool-specific performance issues.
+          dashboard_url: "https://grafana.company.com/d/task-mcp-tools"
+
+      # Tool Execution Error Rate Alerts
+      - alert: TaskMCPHighToolErrorRate
+        expr: |
+          (
+            sum(rate(tool_errors_total[5m])) /
+            sum(rate(tool_executions_total[5m]))
+          ) > 0.001
+        for: 5m
+        labels:
+          severity: critical
+          slo: tool_error_rate
+        annotations:
+          summary: "Task MCP high tool execution error rate"
+          description: |
+            Tool execution error rate is {{ $value | humanizePercentage }} over the last 5 minutes.
+            SLO target: < 0.1% error rate for critical operations
+            
+            This indicates potential issues with tool implementations or dependencies.
+          dashboard_url: "https://grafana.company.com/d/task-mcp-tools"
+
+      # Throughput Alerts
+      - alert: TaskMCPLowThroughput
+        expr: |
+          sum(rate(http_server_requests_total[5m])) < 10
+        for: 10m
+        labels:
+          severity: warning
+          slo: throughput
+        annotations:
+          summary: "Task MCP HTTP server low throughput"
+          description: |
+            Request rate is {{ $value }} RPS over the last 5 minutes.
+            Expected minimum: 1000 RPS sustained
+            
+            This may indicate service degradation or reduced traffic.
+          dashboard_url: "https://grafana.company.com/d/task-mcp-overview"
+
+      # Streaming Connection Alerts
+      - alert: TaskMCPStreamingConnectionLimit
+        expr: |
+          streaming_active_connections > 900
+        for: 5m
+        labels:
+          severity: warning
+          slo: streaming_throughput
+        annotations:
+          summary: "Task MCP approaching streaming connection limit"
+          description: |
+            Active streaming connections: {{ $value }}
+            Maximum supported: 1000 concurrent connections
+            
+            Consider scaling or implementing connection limits.
+          dashboard_url: "https://grafana.company.com/d/task-mcp-streaming"
+
+      # Health Check Alerts
+      - alert: TaskMCPHealthCheckFailure
+        expr: |
+          health_check_status < 0
+        for: 2m
+        labels:
+          severity: critical
+          slo: availability
+        annotations:
+          summary: "Task MCP health check failure"
+          description: |
+            Health check {{ $labels.check }} is failing.
+            Service availability may be compromised.
+            
+            Immediate investigation required.
+          dashboard_url: "https://grafana.company.com/d/task-mcp-overview"
+
+      - alert: TaskMCPHealthCheckWarning
+        expr: |
+          health_check_status == 0
+        for: 5m
+        labels:
+          severity: warning
+          slo: availability
+        annotations:
+          summary: "Task MCP health check warning"
+          description: |
+            Health check {{ $labels.check }} is warning.
+            Service performance may be degraded.
+            
+            Monitor closely and investigate if persists.
+          dashboard_url: "https://grafana.company.com/d/task-mcp-overview"
+
+  - name: task-mcp-infrastructure-alerts
+    interval: 30s
+    rules:
+      # Resource Utilization Alerts
+      - alert: TaskMCPHighMemoryUsage
+        expr: |
+          (process_memory_bytes{type="heap_used"} / process_memory_bytes{type="heap_total"}) > 0.85
+        for: 10m
+        labels:
+          severity: warning
+          category: infrastructure
+        annotations:
+          summary: "Task MCP high memory usage"
+          description: |
+            Memory usage is {{ $value | humanizePercentage }} of heap allocation.
+            This may lead to garbage collection pressure or OOM errors.
+            
+            Consider investigating memory leaks or scaling resources.
+          dashboard_url: "https://grafana.company.com/d/task-mcp-infrastructure"
+
+      - alert: TaskMCPCriticalMemoryUsage
+        expr: |
+          (process_memory_bytes{type="heap_used"} / process_memory_bytes{type="heap_total"}) > 0.95
+        for: 5m
+        labels:
+          severity: critical
+          category: infrastructure
+        annotations:
+          summary: "Task MCP critical memory usage"
+          description: |
+            Memory usage is {{ $value | humanizePercentage }} of heap allocation.
+            Risk of out-of-memory errors is high.
+            
+            Immediate action required to prevent service failure.
+          dashboard_url: "https://grafana.company.com/d/task-mcp-infrastructure"
+
+      - alert: TaskMCPHighCPUUsage
+        expr: |
+          process_cpu_usage_percent > 80
+        for: 15m
+        labels:
+          severity: warning
+          category: infrastructure
+        annotations:
+          summary: "Task MCP high CPU usage"
+          description: |
+            CPU usage is {{ $value }}% over the last 15 minutes.
+            This may indicate performance bottlenecks.
+            
+            Investigate CPU-intensive operations or scale horizontally.
+          dashboard_url: "https://grafana.company.com/d/task-mcp-infrastructure"
+
+      # Security Alerts
+      - alert: TaskMCPHighAuthFailureRate
+        expr: |
+          (
+            sum(rate(auth_attempts_total{status="failed"}[5m])) /
+            sum(rate(auth_attempts_total[5m]))
+          ) > 0.1
+        for: 5m
+        labels:
+          severity: warning
+          category: security
+        annotations:
+          summary: "Task MCP high authentication failure rate"
+          description: |
+            Authentication failure rate is {{ $value | humanizePercentage }} over the last 5 minutes.
+            This may indicate brute force attempts or configuration issues.
+            
+            Review authentication logs and consider rate limiting adjustments.
+          dashboard_url: "https://grafana.company.com/d/task-mcp-security"
+
+      - alert: TaskMCPRateLimitHits
+        expr: |
+          sum(rate(rate_limit_hits_total[5m])) > 10
+        for: 10m
+        labels:
+          severity: info
+          category: security
+        annotations:
+          summary: "Task MCP rate limit being triggered"
+          description: |
+            Rate limit hits: {{ $value }} per second over the last 5 minutes.
+            This may indicate abusive traffic or insufficient limits.
+            
+            Review traffic patterns and adjust rate limits if needed.
+          dashboard_url: "https://grafana.company.com/d/task-mcp-security"
+
+  - name: task-mcp-business-alerts
+    interval: 60s
+    rules:
+      # Business Metrics
+      - alert: TaskMCPZeroActivity
+        expr: |
+          sum(rate(http_server_requests_total[10m])) == 0
+        for: 15m
+        labels:
+          severity: critical
+          category: business
+        annotations:
+          summary: "Task MCP zero activity detected"
+          description: |
+            No HTTP requests received in the last 15 minutes.
+            This may indicate service outage or network connectivity issues.
+            
+            Verify service status and monitoring configuration.
+          dashboard_url: "https://grafana.company.com/d/task-mcp-overview"
+
+      - alert: TaskMCPActiveExecutionsStuck
+        expr: |
+          tool_active_executions > 50
+        for: 10m
+        labels:
+          severity: warning
+          category: business
+        annotations:
+          summary: "Task MCP high number of active tool executions"
+          description: |
+            Active tool executions: {{ $value }}
+            This may indicate stuck operations or resource contention.
+            
+            Investigate tool execution queue and resource utilization.
+          dashboard_url: "https://grafana.company.com/d/task-mcp-tools"

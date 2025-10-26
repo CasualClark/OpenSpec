@@ -1,0 +1,20 @@
+{
+  "name": "sample-repo",
+  "version": "1.0.0",
+  "description": "Sample repository for Task MCP demonstration",
+  "main": "src/example.js",
+  "scripts": {
+    "start": "node src/example.js",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [
+    "openspec",
+    "task-mcp",
+    "example"
+  ],
+  "author": "Task MCP Team",
+  "license": "MIT",
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}

@@ -78,8 +78,9 @@ export class FileSystemUtils {
       await fs.access(filePath);
       return true;
     } catch (error: any) {
+      // Only log unexpected errors, not ENOENT which is expected for non-existent files
       if (error.code !== 'ENOENT') {
-        console.debug(`Unable to check if file exists at ${filePath}: ${error.message}`);
+        console.error(`Unable to check if file exists at ${filePath}: ${error.message}`);
       }
       return false;
     }
@@ -99,7 +100,7 @@ export class FileSystemUtils {
         return true;
       }
 
-      console.debug(`Unable to determine write permissions for ${filePath}: ${error.message}`);
+      console.error(`Unable to determine write permissions for ${filePath}: ${error.message}`);
       return false;
     }
   }
@@ -110,7 +111,7 @@ export class FileSystemUtils {
       return stats.isDirectory();
     } catch (error: any) {
       if (error.code !== 'ENOENT') {
-        console.debug(`Unable to check if directory exists at ${dirPath}: ${error.message}`);
+        console.error(`Unable to check if directory exists at ${dirPath}: ${error.message}`);
       }
       return false;
     }
@@ -180,7 +181,7 @@ export class FileSystemUtils {
       await fs.unlink(testFile);
       return true;
     } catch (error: any) {
-      console.debug(`Insufficient permissions to write to ${dirPath}: ${error.message}`);
+      console.error(`Insufficient permissions to write to ${dirPath}: ${error.message}`);
       return false;
     }
   }

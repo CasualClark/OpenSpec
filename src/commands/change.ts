@@ -7,6 +7,7 @@ import { ChangeParser } from '../core/parsers/change-parser.js';
 import { Change } from '../core/schemas/index.js';
 import { isInteractive } from '../utils/interactive.js';
 import { getActiveChangeIds } from '../utils/item-discovery.js';
+import { ChangeTemplateManager, ChangeTemplateContext } from '../core/templates/index.js';
 
 // Constants for better maintainability
 const ARCHIVE_DIR = 'archive';
@@ -15,9 +16,52 @@ const COMPLETED_TASK_PATTERN = /^[-*]\s+\[x\]/i;
 
 export class ChangeCommand {
   private converter: JsonConverter;
+  private templateManager: ChangeTemplateManager;
 
   constructor() {
     this.converter = new JsonConverter();
+    this.templateManager = new ChangeTemplateManager();
+  }
+
+  /**
+   * Open a new change using a template.
+   * Creates the directory structure and initial files based on the specified template.
+   */
+  async open(
+    title: string,
+    slug: string,
+    options?: {
+      template?: 'feature' | 'bugfix' | 'chore';
+      rationale?: string;
+      owner?: string;
+      ttl?: number;
+    }
+  ): Promise<void> {
+    const templateType = options?.template || 'feature';
+    
+    const context: ChangeTemplateContext = {
+      title,
+      slug,
+      rationale: options?.rationale,
+      owner: options?.owner,
+      ttl: options?.ttl
+    };
+
+    try {
+      const changeDir = await this.templateManager.createChange(templateType, context);
+      console.log(`✅ Change "${slug}" created successfully at: ${changeDir}`);
+      console.log(`📝 Proposal: ${path.join(changeDir, 'proposal.md')}`);
+      console.log(`📋 Tasks: ${path.join(changeDir, 'tasks.md')}`);
+      console.log(`📁 Specs: ${path.join(changeDir, 'specs')}`);
+      console.log(`\nNext steps:`);
+      console.log(`1. Edit the proposal: ${path.join(changeDir, 'proposal.md')}`);
+      console.log(`2. Review and update tasks: ${path.join(changeDir, 'tasks.md')}`);
+      console.log(`3. Add detailed specs in the specs/ directory`);
+      console.log(`4. Validate your change: openspec change validate ${slug}`);
+    } catch (error: any) {
+      console.error(`❌ Failed to create change "${slug}": ${error.message}`);
+      process.exitCode = 1;
+    }
   }
 
   /**

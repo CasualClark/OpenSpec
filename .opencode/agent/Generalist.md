@@ -3,7 +3,7 @@ name: Generalist
 description: Hands-on primary agent for building, fixing, and exploring with you
 mode: all
 #model: zai-coding-plan/glm-4.6
-model: chutes/zai-org/GLM-4.6-turbo
+model: chutes/zai-org/GLM-4.6-FP8
 temperature: 0.6
 permission:
   edit: allow

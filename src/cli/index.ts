@@ -13,6 +13,7 @@ import { registerSpecCommand } from '../commands/spec.js';
 import { ChangeCommand } from '../commands/change.js';
 import { ValidateCommand } from '../commands/validate.js';
 import { ShowCommand } from '../commands/show.js';
+import { registerStdioCommand } from '../commands/stdio.js';
 
 const program = new Command();
 const require = createRequire(import.meta.url);
@@ -181,6 +182,28 @@ changeCmd
     }
   });
 
+changeCmd
+  .command('open <title> <slug>')
+  .description('Open a new change using a template')
+  .option('--template <type>', 'Template type: feature, bugfix, chore (default: feature)', 'feature')
+  .option('--rationale <text>', 'Rationale for the change')
+  .option('--owner <name>', 'Change owner (default: TBD)')
+  .option('--ttl <seconds>', 'Lock time-to-live in seconds (default: 3600)', '3600')
+  .action(async (title: string, slug: string, options?: { template?: string; rationale?: string; owner?: string; ttl?: string }) => {
+    try {
+      const changeCommand = new ChangeCommand();
+      await changeCommand.open(title, slug, {
+        template: options?.template as 'feature' | 'bugfix' | 'chore',
+        rationale: options?.rationale,
+        owner: options?.owner,
+        ttl: options?.ttl ? parseInt(options.ttl, 10) : undefined
+      });
+    } catch (error) {
+      console.error(`Error: ${(error as Error).message}`);
+      process.exitCode = 1;
+    }
+  });
+
 program
   .command('archive [change-name]')
   .description('Archive a completed change and update main specs')
@@ -199,6 +222,7 @@ program
   });
 
 registerSpecCommand(program);
+registerStdioCommand(program);
 
 // Top-level validate command
 program
