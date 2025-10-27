@@ -1,65 +1,102 @@
 # Getting Started Guide - Task MCP
 
-_Last updated: 2025-10-23_
+_Last updated: 2025-10-26_
 
 ## Overview
 
-Task MCP provides a minimal, well-structured contract surface for managing changes through OpenSpec. This guide will help you get up and running quickly.
+Task MCP provides a minimal, well-structured contract surface for managing changes through OpenSpec. This guide will help you get up and running in **4.5 minutes** with our simplified dockerless-first approach.
 
 ## Prerequisites
 
-### System Requirements
-- **Node.js**: v18.0.0 or higher
-- **Python**: v3.8 or higher (for schema validation)
+### Simplified Requirements
+**You only need:**
+- **Node.js**: v20.19.0 or higher
 - **Git**: v2.30 or higher
-- **OpenSpec CLI**: v3.2.1 or higher
+- A terminal
 
-### Development Environment
 ```bash
-# Verify Node.js installation
-node --version  # Should be v18.0.0+
-
-# Verify Python installation  
-python3 --version  # Should be 3.8+
-
-# Verify Git installation
-git --version  # Should be 2.30+
-
-# Verify OpenSpec CLI
-openspec --version  # Should be 3.2.1+
+# Quick check
+node --version  # Should show v20.19.0+
+git --version   # Should show git version
 ```
 
-## Installation
+That's it! No Python, no global CLI installs, no complex configuration.
 
-### 1. Clone the Repository
-```bash
-git clone https://github.com/your-org/openspec.git
-cd openspec
-```
+## 4.5-Minute Setup
 
-### 2. Install Dependencies
+### 1. Clone and Install (1 minute)
+
 ```bash
-# Install Node.js dependencies
+# Clone the repository
+git clone https://github.com/Fission-AI/OpenSpec.git
+cd OpenSpec
+
+# Install dependencies  
 npm install
-
-# Install Python dependencies
-pip install -r requirements.txt
-
-# Install OpenSpec CLI globally
-npm install -g @openspec/cli
 ```
 
-### 3. Setup Development Environment
+### 2. Start Task MCP Server (30 seconds)
+
 ```bash
-# Create configuration file
-cp config.example.json config.json
+# Start in stdio mode (for IDE integration)
+npm run dev
 
-# Run initial setup
-npm run setup
-
-# Verify installation
-npm run test
+# Or start directly
+node bin/openspec.js task-mcp --stdio
 ```
+
+Leave this running in your terminal.
+
+### 3. Create Your First Change (1 minute)
+
+Open a **new terminal** and run:
+
+```bash
+# Create a simple change
+npm run dev:cli change create \
+  --title "Add user login feature" \
+  --slug "add-user-login" \
+  --template feature
+```
+
+You'll see output like:
+```
+✓ Created change: add-user-login
+📁 Location: openspec/changes/add-user-login
+🔓 Unlocked (no owner specified)
+```
+
+### 4. Edit Your Change (2 minutes)
+
+```bash
+# Navigate to your change
+cd openspec/changes/add-user-login
+
+# Edit the proposal (what and why)
+vim proposal.md
+# or use any editor: code proposal.md, nano proposal.md, etc.
+
+# Edit the tasks (how and when)  
+vim tasks.md
+```
+
+### 5. Archive Your Change (30 seconds)
+
+```bash
+# Go back to project root
+cd ../../..
+
+# Archive your completed change
+npm run dev:cli change archive --slug add-user-login
+```
+
+You'll see:
+```
+✓ Archived change: add-user-login
+📋 Receipt: openspec/changes/add-user-login/receipt.json
+```
+
+**🎉 You're done!** You just completed the full OpenSpec workflow.
 
 ## Quick Start
 
